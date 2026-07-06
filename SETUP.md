@@ -68,14 +68,21 @@ create table entries (
   created_at timestamptz not null default now()
 );
 
+-- Giv den indloggede rolle adgang til tabellen (RLS filtrerer stadig rækkerne).
+-- Supabase giver normalt disse rettigheder automatisk, men vær eksplicit for
+-- en sikkerheds skyld – uden dem fejler alle inserts med
+-- "permission denied for table entries" (code 42501).
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table entries to authenticated;
+
 -- Slå Row Level Security til (uden dette kan ingen læse/skrive)
 alter table entries enable row level security;
 
 -- Hver bruger må kun røre sine egne rækker
-create policy "egne raekker - laes"    on entries for select using (auth.uid() = user_id);
-create policy "egne raekker - indsaet" on entries for insert with check (auth.uid() = user_id);
-create policy "egne raekker - opdater" on entries for update using (auth.uid() = user_id);
-create policy "egne raekker - slet"    on entries for delete using (auth.uid() = user_id);
+create policy "egne raekker - laes"    on entries for select to authenticated using (auth.uid() = user_id);
+create policy "egne raekker - indsaet" on entries for insert to authenticated with check (auth.uid() = user_id);
+create policy "egne raekker - opdater" on entries for update to authenticated using (auth.uid() = user_id);
+create policy "egne raekker - slet"    on entries for delete to authenticated using (auth.uid() = user_id);
 ```
 
 3. Du skulle gerne se **Success. No rows returned**.
