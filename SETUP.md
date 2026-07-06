@@ -161,7 +161,7 @@ netop den enhed.
    - **Source:** *Deploy from a branch*
    - **Branch:** `main`, mappe `/ (root)` → **Save**.
    - Efter ~1 minut vises din URL, fx:
-     `https://bashieredk.github.io/CalorieCounter/`
+     `https://basheredk.github.io/CalorieCounter/`
 
 4. **Luk cirklen:** kopiér den URL og læg den ind i Supabase under
    **Authentication → URL Configuration** (både Site URL og Redirect URLs,
