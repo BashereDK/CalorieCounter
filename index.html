@@ -182,6 +182,36 @@
     font-size: 14px;
   }
 
+  .meal-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .meal-card-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .meal-card-head .meal-time { color: var(--muted); font-size: 12px; }
+  .meal-card-head .meal-kcal { margin-left: auto; color: var(--accent2); font-weight: 700; font-size: 14px; }
+  .meal-card-head .del-meal {
+    background: none; border: none; color: var(--danger);
+    font-size: 16px; padding: 2px 4px; line-height: 1;
+  }
+  .empty-meal { color: var(--muted); font-size: 13px; padding: 14px; text-align: center; }
+  .add-food {
+    width: 100%;
+    background: #14161c;
+    border: none;
+    border-top: 1px solid var(--border);
+    color: var(--accent);
+    font-size: 14px; font-weight: 600;
+    padding: 12px;
+  }
+  .add-food:active { opacity: 0.7; }
+
   footer {
     text-align: center;
     color: var(--muted);
@@ -248,11 +278,8 @@
   </div>
 
   <div class="card">
-    <label for="food">Fødevare</label>
-    <input id="food" type="text" placeholder="F.eks. mælk, ost, æble" autocomplete="off">
-
-    <label for="meal">Måltid</label>
-    <select id="meal">
+    <label for="mealType">Nyt måltid</label>
+    <select id="mealType">
       <option value="Morgen">Morgen</option>
       <option value="Middag">Middag</option>
       <option value="Aften">Aften</option>
@@ -260,26 +287,13 @@
       <option value="Snack">Snack</option>
     </select>
 
-    <div class="row2">
-      <div>
-        <label for="kcal100">Kalorier pr. 100 g</label>
-        <input id="kcal100" type="number" inputmode="decimal" placeholder="f.eks. 250">
-      </div>
-      <div>
-        <label for="grams">Gram</label>
-        <input id="grams" type="number" inputmode="decimal" placeholder="f.eks. 150">
-      </div>
-    </div>
-
-    <div class="preview" id="preview"></div>
-
-    <button class="add" id="addBtn">Tilføj registrering</button>
+    <button class="add" id="newMealBtn" style="margin-top:14px;">➕ Opret måltid</button>
     <div class="hint" id="addHint" style="display:none; text-align:center; margin-top:10px; cursor:pointer;">🔒 Log ind for at tilføje registreringer</div>
   </div>
 
-  <div class="section-title">Registreringer</div>
-  <div class="card" id="listCard" style="padding: 0;">
-    <div class="empty" id="emptyMsg">Ingen registreringer endnu</div>
+  <div class="section-title">Måltider</div>
+  <div id="mealList">
+    <div class="empty" id="emptyMsg">Ingen måltider endnu</div>
   </div>
 </main>
 
@@ -317,6 +331,32 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="foodModalOverlay">
+  <div class="modal">
+    <h2 id="foodModalTitle">Tilføj fødevare</h2>
+    <p>Tilføj de fødevarer der indgår i måltidet — én ad gangen. Du kan blive ved med at tilføje.</p>
+
+    <label for="fFood">Fødevare</label>
+    <input id="fFood" type="text" placeholder="F.eks. havregryn, mælk, sukker" autocomplete="off">
+
+    <div class="row2">
+      <div>
+        <label for="fKcal100">Kalorier pr. 100 g</label>
+        <input id="fKcal100" type="number" inputmode="decimal" placeholder="f.eks. 370">
+      </div>
+      <div>
+        <label for="fGrams">Gram</label>
+        <input id="fGrams" type="number" inputmode="decimal" placeholder="f.eks. 60">
+      </div>
+    </div>
+
+    <div class="preview" id="fPreview"></div>
+
+    <button class="add" id="fAddBtn">Tilføj til måltidet</button>
+    <button class="close" id="fCloseBtn">Færdig</button>
+  </div>
+</div>
+
 <script>
 // ============================================================
 //  KONFIGURATION
@@ -328,34 +368,69 @@
 const SUPABASE_URL  = localStorage.getItem('kalorie_sb_url') || 'https://ikmbxlfrhgnnvwzkrwky.supabase.co';
 const SUPABASE_ANON = localStorage.getItem('kalorie_sb_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrbWJ4bGZyaGdubnZ3emtyd2t5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNDQ3NDcsImV4cCI6MjA5ODkyMDc0N30.6GTRpKziqzzGKNsMK7vdths2cd2tBDA4iIIT_LMgcRc';
 
-const STORAGE_KEY = 'kalorie_entries_v1';
+const MEALS_KEY   = 'kalorie_meals_v1';
+const ENTRIES_KEY = 'kalorie_entries_v2';
+const OLD_ENTRIES_KEY = 'kalorie_entries_v1';
 const TABLE = 'entries';
 
+// Datamodel:
+//   meals[]   = { id, datetime, type }                         (containeren)
+//   entries[] = { id, meal_id, food, kcal100, grams, kcal }    (fødevarer i et måltid)
+// I skyen ligger alt i tabellen 'entries', hvor måltidets datetime + type
+// gemmes denormaliseret på hver fødevare-række, så et måltid kan rekonstrueres
+// ud fra meal_id. Tomme måltider (uden fødevarer) lever kun lokalt, indtil de
+// får deres første fødevare.
+let meals = [];
 let entries = [];
 let sb = null;          // Supabase-klient
 let user = null;        // Aktuel bruger (eller null)
 let saveTimer = null;
 
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function findMeal(id) { return meals.find(m => m.id === id); }
+
 // ---- Datamapping mellem app og database ----
 function toRow(e) {
-  return { id: e.id, datetime: e.datetime, food: e.food, meal: e.meal,
+  const m = findMeal(e.meal_id) || {};
+  return { id: e.id, meal_id: e.meal_id, datetime: m.datetime || new Date().toISOString(),
+           food: e.food, meal: m.type || null,
            kcal_100: e.kcal100, grams: e.grams, kcal: e.kcal };
 }
 function fromRow(r) {
-  return { id: r.id, datetime: r.datetime, food: r.food, meal: r.meal,
-           kcal100: Number(r.kcal_100), grams: Number(r.grams), kcal: Number(r.kcal) };
+  // Ældre rækker uden meal_id bliver deres eget ét-fødevares måltid (deterministisk id)
+  const meal_id = r.meal_id || ('m-' + r.id);
+  return {
+    entry: { id: r.id, meal_id, food: r.food,
+             kcal100: Number(r.kcal_100), grams: Number(r.grams), kcal: Number(r.kcal) },
+    meal:  { id: meal_id, datetime: r.datetime, type: r.meal || 'Snack' }
+  };
 }
 
 // ---- Lokal cache ----
-function loadEntries() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    entries = raw ? JSON.parse(raw) : [];
-  } catch (e) { entries = []; }
+function loadState() {
+  try { meals = JSON.parse(localStorage.getItem(MEALS_KEY)) || []; } catch (e) { meals = []; }
+  try { entries = JSON.parse(localStorage.getItem(ENTRIES_KEY)) || []; } catch (e) { entries = []; }
+
+  // Engangs-migrering fra den gamle flade model (én fødevare pr. registrering)
+  if (!meals.length && !entries.length) {
+    let old = [];
+    try { old = JSON.parse(localStorage.getItem(OLD_ENTRIES_KEY)) || []; } catch (e) { old = []; }
+    if (old.length) {
+      old.forEach(o => {
+        const mealId = 'm-' + o.id;
+        meals.push({ id: mealId, datetime: o.datetime, type: o.meal || 'Snack' });
+        entries.push({ id: o.id, meal_id: mealId, food: o.food,
+                       kcal100: Number(o.kcal100), grams: Number(o.grams), kcal: Number(o.kcal) });
+      });
+      saveLocal();
+    }
+  }
 }
 function saveLocal() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); }
-  catch (e) { /* localStorage kan være fuld/blokeret; data ligger fortsat i skyen */ }
+  try {
+    localStorage.setItem(MEALS_KEY, JSON.stringify(meals));
+    localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
+  } catch (e) { /* localStorage kan være fuld/blokeret; data ligger fortsat i skyen */ }
 }
 
 // ---- Status ----
@@ -431,13 +506,12 @@ function isLoggedIn() { return !!user; }
 
 function applyAuthGate() {
   const loggedIn = isLoggedIn();
-  ['food', 'meal', 'kcal100', 'grams'].forEach(id => {
-    document.getElementById(id).disabled = !loggedIn;
-  });
-  const addBtn = document.getElementById('addBtn');
-  addBtn.disabled = !loggedIn;
-  addBtn.style.opacity = loggedIn ? '' : '0.5';
+  document.getElementById('mealType').disabled = !loggedIn;
+  const newMealBtn = document.getElementById('newMealBtn');
+  newMealBtn.disabled = !loggedIn;
+  newMealBtn.style.opacity = loggedIn ? '' : '0.5';
   document.getElementById('addHint').style.display = loggedIn ? 'none' : 'block';
+  render();  // vis/skjul tilføj- og slet-knapper afhængigt af login
 }
 
 // ---- Synkronisering ----
@@ -456,9 +530,11 @@ async function pushEntry(e) {
     error ? 'Gemmes lokalt (ingen forbindelse)' : 'Synkroniseret ' + nowTime());
 }
 
-async function removeRemote(id) {
+async function removeRemote(ids) {
   if (!sb || !user) return;
-  await sb.from(TABLE).delete().eq('id', id);
+  const list = Array.isArray(ids) ? ids : [ids];
+  if (!list.length) return;
+  await sb.from(TABLE).delete().in('id', list);
 }
 
 async function pullAll() {
@@ -467,19 +543,31 @@ async function pullAll() {
   const { data, error } = await sb.from(TABLE).select('*');
   if (error) { setSyncStatus('off', 'Kunne ikke hente data'); return; }
 
-  const remote = (data || []).map(fromRow);
-  const remoteIds = new Set(remote.map(e => e.id));
+  const remoteEntries = [];
+  const remoteMealsById = new Map();
+  (data || []).forEach(r => {
+    const { entry, meal } = fromRow(r);
+    remoteEntries.push(entry);
+    if (!remoteMealsById.has(meal.id)) remoteMealsById.set(meal.id, meal);
+  });
+  const remoteIds = new Set(remoteEntries.map(e => e.id));
 
-  // Skub lokale registreringer op, som endnu ikke er i skyen (fx oprettet offline)
+  // Skub lokale fødevarer op, som endnu ikke er i skyen (fx oprettet offline)
   const localOnly = entries.filter(e => !remoteIds.has(e.id));
   if (localOnly.length) {
     await sb.from(TABLE).upsert(localOnly.map(toRow));
   }
 
-  // Flet: skyen + evt. lokale-kun
+  // Flet fødevarer: skyen + evt. lokale-kun
   const byId = new Map();
-  [...remote, ...localOnly].forEach(e => byId.set(e.id, e));
+  [...remoteEntries, ...localOnly].forEach(e => byId.set(e.id, e));
   entries = Array.from(byId.values());
+
+  // Flet måltider: behold lokale (inkl. tomme) og lad skyens metadata vinde
+  const mealsById = new Map();
+  meals.forEach(m => mealsById.set(m.id, m));
+  remoteMealsById.forEach((m, id) => mealsById.set(id, m));
+  meals = Array.from(mealsById.values());
 
   saveLocal();
   render();
@@ -518,48 +606,81 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
+function mealEntries(mealId) { return entries.filter(e => e.meal_id === mealId); }
+function mealTotal(mealId) { return mealEntries(mealId).reduce((s, e) => s + e.kcal, 0); }
+
 function render() {
-  const todayTotal = entries.filter(e => isToday(e.datetime)).reduce((s,e) => s + e.kcal, 0);
-  const allTotal = entries.reduce((s,e) => s + e.kcal, 0);
+  const loggedIn = isLoggedIn();
+
+  // Totaler
+  const mealById = new Map(meals.map(m => [m.id, m]));
+  let todayTotal = 0, allTotal = 0;
+  for (const e of entries) {
+    allTotal += e.kcal;
+    const m = mealById.get(e.meal_id);
+    if (m && isToday(m.datetime)) todayTotal += e.kcal;
+  }
   document.getElementById('todayTotal').textContent = fmt(todayTotal);
   document.getElementById('allTotal').textContent = fmt(allTotal);
 
-  const listCard = document.getElementById('listCard');
-  if (entries.length === 0) {
-    listCard.innerHTML = '<div class="empty" id="emptyMsg">Ingen registreringer endnu</div>';
+  const mealList = document.getElementById('mealList');
+  if (meals.length === 0) {
+    mealList.innerHTML = '<div class="empty" id="emptyMsg">Ingen måltider endnu</div>';
     return;
   }
 
-  const sorted = [...entries].sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
+  // Sortér måltider (nyeste øverst) og grupper pr. dag
+  const sorted = [...meals].sort((a, b) => new Date(b.datetime) - new Date(a.datetime));
   let groups = [], currentDay = null;
-  for (const e of sorted) {
-    const label = dayLabel(e.datetime);
+  for (const m of sorted) {
+    const label = dayLabel(m.datetime);
     if (!currentDay || currentDay.label !== label) {
-      currentDay = { label, items: [], total: 0 };
+      currentDay = { label, meals: [], total: 0 };
       groups.push(currentDay);
     }
-    currentDay.items.push(e);
-    currentDay.total += e.kcal;
+    currentDay.meals.push(m);
+    currentDay.total += mealTotal(m.id);
   }
 
   let html = '';
   for (const g of groups) {
     html += '<div class="day-header"><span>' + g.label + '</span><span class="day-total">' + fmt(g.total) + ' kcal</span></div>';
-    for (const e of g.items) {
-      html +=
-        '<div class="entry">' +
-          '<div class="info">' +
-            '<div class="food"><span class="meal-tag meal-' + (e.meal || 'Snack') + '">' + (e.meal || '') + '</span>' + escapeHtml(e.food) + '</div>' +
-            '<div class="meta">' + timeLabel(e.datetime) + ' · ' + e.grams + ' g · ' + e.kcal100 + '/100g</div>' +
-          '</div>' +
-          '<div class="kcal">' + fmt(e.kcal) + '</div>' +
-          '<button class="del" data-id="' + e.id + '">✕</button>' +
-        '</div>';
+    for (const m of g.meals) {
+      const items = mealEntries(m.id);
+      html += '<div class="meal-card">';
+      html += '<div class="meal-card-head">' +
+                '<span class="meal-tag meal-' + (m.type || 'Snack') + '">' + escapeHtml(m.type || '') + '</span>' +
+                '<span class="meal-time">' + timeLabel(m.datetime) + '</span>' +
+                '<span class="meal-kcal">' + fmt(mealTotal(m.id)) + ' kcal</span>' +
+                (loggedIn ? '<button class="del-meal" data-meal="' + m.id + '">✕</button>' : '') +
+              '</div>';
+
+      if (items.length === 0) {
+        html += '<div class="empty-meal">Ingen fødevarer endnu</div>';
+      } else {
+        for (const e of items) {
+          html +=
+            '<div class="entry">' +
+              '<div class="info">' +
+                '<div class="food">' + escapeHtml(e.food) + '</div>' +
+                '<div class="meta">' + e.grams + ' g · ' + e.kcal100 + '/100g</div>' +
+              '</div>' +
+              '<div class="kcal">' + fmt(e.kcal) + '</div>' +
+              (loggedIn ? '<button class="del" data-id="' + e.id + '">✕</button>' : '') +
+            '</div>';
+        }
+      }
+
+      if (loggedIn) {
+        html += '<button class="add-food" data-meal="' + m.id + '">+ tilføj fødevare</button>';
+      }
+      html += '</div>';
     }
   }
-  listCard.innerHTML = html;
+  mealList.innerHTML = html;
 
-  listCard.querySelectorAll('.del').forEach(btn => {
+  // Slet enkelt fødevare
+  mealList.querySelectorAll('.del').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-id');
       entries = entries.filter(e => e.id !== id);
@@ -568,52 +689,93 @@ function render() {
       removeRemote(id);
     });
   });
+
+  // Slet helt måltid (med alle dets fødevarer)
+  mealList.querySelectorAll('.del-meal').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mealId = btn.getAttribute('data-meal');
+      const ids = mealEntries(mealId).map(e => e.id);
+      if (ids.length && !confirm('Slet hele måltidet med ' + ids.length + ' fødevare(r)?')) return;
+      entries = entries.filter(e => e.meal_id !== mealId);
+      meals = meals.filter(m => m.id !== mealId);
+      saveLocal();
+      render();
+      removeRemote(ids);
+    });
+  });
+
+  // Tilføj fødevare til et måltid
+  mealList.querySelectorAll('.add-food').forEach(btn => {
+    btn.addEventListener('click', () => openFoodModal(btn.getAttribute('data-meal')));
+  });
 }
 
-function updatePreview() {
-  const kcal100 = parseFloat(document.getElementById('kcal100').value);
-  const grams = parseFloat(document.getElementById('grams').value);
-  const preview = document.getElementById('preview');
-  preview.innerHTML = (!isNaN(kcal100) && !isNaN(grams))
+// ---- Fødevare-modal (tilføj fødevare til et bestemt måltid) ----
+let activeMealId = null;
+
+function openFoodModal(mealId) {
+  if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
+  const m = findMeal(mealId);
+  if (!m) return;
+  activeMealId = mealId;
+  document.getElementById('foodModalTitle').textContent = 'Tilføj til ' + (m.type || 'måltid');
+  document.getElementById('fFood').value = '';
+  document.getElementById('fKcal100').value = '';
+  document.getElementById('fGrams').value = '';
+  document.getElementById('fPreview').innerHTML = '';
+  foodModalOverlay.classList.add('open');
+  setTimeout(() => document.getElementById('fFood').focus(), 50);
+}
+
+function updateFoodPreview() {
+  const kcal100 = parseFloat(document.getElementById('fKcal100').value);
+  const grams = parseFloat(document.getElementById('fGrams').value);
+  document.getElementById('fPreview').innerHTML = (!isNaN(kcal100) && !isNaN(grams))
     ? '= <b>' + fmt(kcal100 * grams / 100) + ' kcal</b>' : '';
 }
 
-document.getElementById('kcal100').addEventListener('input', updatePreview);
-document.getElementById('grams').addEventListener('input', updatePreview);
-
-document.getElementById('addBtn').addEventListener('click', () => {
-  if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
-
-  const food = document.getElementById('food').value.trim();
-  const kcal100 = parseFloat(document.getElementById('kcal100').value);
-  const grams = parseFloat(document.getElementById('grams').value);
+function addFoodToMeal() {
+  if (!activeMealId || !isLoggedIn()) return;
+  const food = document.getElementById('fFood').value.trim();
+  const kcal100 = parseFloat(document.getElementById('fKcal100').value);
+  const grams = parseFloat(document.getElementById('fGrams').value);
 
   if (!food) { alert('Skriv navnet på fødevaren'); return; }
   if (isNaN(kcal100) || isNaN(grams)) { alert('Udfyld kalorier pr. 100g og gram'); return; }
 
-  const entry = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-    datetime: new Date().toISOString(),
-    food, meal: document.getElementById('meal').value, kcal100, grams,
-    kcal: kcal100 * grams / 100
-  };
+  const entry = { id: genId(), meal_id: activeMealId, food, kcal100, grams, kcal: kcal100 * grams / 100 };
   entries.push(entry);
 
   saveLocal();
   render();
   scheduleCloudSave(entry);
 
-  document.getElementById('food').value = '';
-  document.getElementById('meal').value = 'Morgen';
-  document.getElementById('kcal100').value = '';
-  document.getElementById('grams').value = '';
-  document.getElementById('preview').innerHTML = '';
-  document.getElementById('food').focus();
+  // Klar til næste fødevare i samme måltid
+  document.getElementById('fFood').value = '';
+  document.getElementById('fKcal100').value = '';
+  document.getElementById('fGrams').value = '';
+  document.getElementById('fPreview').innerHTML = '';
+  document.getElementById('fFood').focus();
+}
+
+document.getElementById('fKcal100').addEventListener('input', updateFoodPreview);
+document.getElementById('fGrams').addEventListener('input', updateFoodPreview);
+document.getElementById('fAddBtn').addEventListener('click', addFoodToMeal);
+document.getElementById('fCloseBtn').addEventListener('click', () => foodModalOverlay.classList.remove('open'));
+
+// ---- Opret nyt måltid ----
+document.getElementById('newMealBtn').addEventListener('click', () => {
+  if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
+  const meal = { id: genId(), datetime: new Date().toISOString(), type: document.getElementById('mealType').value };
+  meals.push(meal);
+  saveLocal();
+  render();
+  openFoodModal(meal.id);   // åbn med det samme, så fødevarer kan tilføjes
 });
 
 // ---- Eksport / backup ----
 function exportData() {
-  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ meals, entries }, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -624,6 +786,7 @@ function exportData() {
 
 // ---- Indstillinger ----
 const modalOverlay = document.getElementById('modalOverlay');
+const foodModalOverlay = document.getElementById('foodModalOverlay');
 document.getElementById('settingsBtn').addEventListener('click', () => {
   const url = localStorage.getItem('kalorie_sb_url');
   const key = localStorage.getItem('kalorie_sb_key');
@@ -647,7 +810,7 @@ document.getElementById('saveSbBtn').addEventListener('click', () => {
 });
 
 // ---- Opstart ----
-loadEntries();
+loadState();
 render();
 applyAuthGate();   // start med lukket adgang indtil login er bekræftet
 initSupabase();

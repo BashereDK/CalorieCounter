@@ -4,32 +4,37 @@ Formål
 
 En simpel iPhone-webapp (PWA, "Add to Home Screen") til at registrere kalorieindtag manuelt, uden App Store. Køres som en statisk HTML/JS-side hostet på for eksempel GitHub Pages.
 
-Datafelter pr. registrering
+Datamodel
 
-Måltid – valgliste: Morgen, Middag, Aften, Mellemmåltid, Snack
-Følgende kolonner knyttes til det valgte måltid
+Et måltid er en container for flere fødevare-registreringer, så man kun vælger
+måltidstype én gang og derefter kan tilføje fx havregryn, mælk og sukker under
+samme måltid.
 
+Måltid (container)
+Måltidstype – valgliste: Morgen, Middag, Aften, Mellemmåltid, Snack
+Dato/tid – sættes automatisk ved oprettelse af måltidet (ikke redigerbar)
 
-Dato/tid – sættes automatisk ved oprettelse (ikke redigerbar)
-
+Fødevare (flere pr. måltid)
 Fødevare – fritekst (fx "mælk", "ost")
-
 Kalorier pr. 100 g – tal, indtastes manuelt
-
 Gram – tal, indtastes manuelt
-
 Kalorier (beregnet) – kalorier_pr_100g * gram / 100, skrivebeskyttet/afledt felt
+
+Adgang: kun brugere der er logget ind kan oprette måltider og tilføje fødevarer.
 
 
 Visning
 
 Total kalorier i dag og i alt, øverst
 
-Liste over registreringer, grupperet pr. dag (nyeste øverst), med dagstotal pr. gruppe
+Liste over måltider som kort, grupperet pr. dag (nyeste øverst), med dagstotal pr. gruppe
 
-Hver registrering viser: måltid (farvet mærkat), fødevare, klokkeslæt, gram, kcal/100g, samlet kcal
+Hvert måltidskort viser: måltidstype (farvet mærkat), klokkeslæt, måltidets totale kcal, og
+en liste af de fødevarer der indgår (fødevare, gram, kcal/100g, kcal pr. fødevare)
 
-Mulighed for at slette en registrering
+Knap på hvert kort til at tilføje flere fødevarer til måltidet
+
+Mulighed for at slette en enkelt fødevare eller hele måltidet
 
 Lagring og synkronisering
 
@@ -38,7 +43,8 @@ Bemærk: localStorage er KUN en cache — iOS Safari kan slette den efter ~7 dag
 Cloud (kilde til sandhed): Supabase (hostet Postgres) med login → data ligger server-side og går ikke tabt
 
 Login: magic-link via email (Supabase Auth signInWithOtp) — ingen adgangskode, session huskes længe via refresh-token
-Tabel: entries med kolonner id, user_id, datetime, food, meal, kcal_100, grams, kcal
+Tabel: entries med kolonner id, user_id, meal_id, datetime, food, meal, kcal_100, grams, kcal
+(meal_id grupperer fødevarer i samme måltid; datetime + meal er måltidets tid/type, denormaliseret på hver fødevare. Tomme måltider uden fødevarer lever kun lokalt indtil første fødevare tilføjes.)
 Row Level Security (RLS): hver bruger kan kun se/redigere rækker hvor user_id = auth.uid()
 Debounced upsert (ca. 800 ms efter ændring) + fuld pull ved login (fletter lokale-kun registreringer op i skyen)
 Eksport til JSON-fil som ekstra manuel backup (tandhjul-ikon)
@@ -64,6 +70,7 @@ SQL til at oprette tabel + policies (kør i Supabase → SQL Editor):
   create table entries (
     id text primary key,
     user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+    meal_id text,
     datetime timestamptz not null,
     food text not null,
     meal text,

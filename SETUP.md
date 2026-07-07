@@ -55,10 +55,13 @@ Samlet tidsforbrug: ca. 15 minutter. Alt er gratis.
 2. Indsæt hele blokken herunder og klik **Run**.
 
 ```sql
--- Tabel til alle kalorie-registreringer
+-- Tabel til alle kalorie-registreringer.
+-- Hver række er én fødevare. Fødevarer samles i et måltid via meal_id
+-- (måltidets tidspunkt og type ligger denormaliseret i datetime + meal).
 create table entries (
   id text primary key,
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  meal_id text,
   datetime timestamptz not null,
   food text not null,
   meal text,
@@ -89,6 +92,17 @@ create policy "egne raekker - slet"    on entries for delete to authenticated us
 
 **Kontrol:** gå til **Table Editor** → du bør se tabellen `entries`, og øverst
 et lille skjold-ikon der viser at RLS er **enabled**.
+
+> **Har du allerede oprettet tabellen fra en tidligere version?** Kør blot denne
+> ene linje i SQL Editor for at tilføje den nye måltids-kolonne — dine data
+> bevares:
+>
+> ```sql
+> alter table entries add column if not exists meal_id text;
+> ```
+>
+> Eksisterende registreringer uden `meal_id` vises automatisk som hver deres
+> ét-fødevares måltid.
 
 ---
 
