@@ -68,7 +68,25 @@
     border: 1px solid var(--border);
   }
   .total-box .num { font-size: 24px; font-weight: 700; color: var(--accent2); }
+  .total-box .num.over { color: var(--danger); }
   .total-box .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .goal-input {
+    width: 100%;
+    text-align: center;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    color: var(--accent);
+    font-size: 24px;
+    font-weight: 700;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .goal-input:focus { outline: none; }
+  .goal-input::placeholder { color: var(--muted); }
+  .goal-input::-webkit-outer-spin-button,
+  .goal-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
   label { display:block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
   label:first-child { margin-top: 0; }
@@ -272,8 +290,8 @@
       <div class="lbl">I dag</div>
     </div>
     <div class="total-box">
-      <div class="num" id="allTotal">0</div>
-      <div class="lbl">I alt</div>
+      <input class="num goal-input" id="goalInput" type="number" inputmode="numeric" placeholder="–">
+      <div class="lbl">Mål / dag</div>
     </div>
   </div>
 
@@ -371,7 +389,10 @@ const SUPABASE_ANON = localStorage.getItem('kalorie_sb_key') || 'eyJhbGciOiJIUzI
 const MEALS_KEY   = 'kalorie_meals_v1';
 const ENTRIES_KEY = 'kalorie_entries_v2';
 const OLD_ENTRIES_KEY = 'kalorie_entries_v1';
+const GOAL_KEY    = 'kalorie_goal_v1';
 const TABLE = 'entries';
+
+let goal = 0;   // dagligt kaloriemål (0 = ikke sat)
 
 // Datamodel:
 //   meals[]   = { id, datetime, type }                         (containeren)
@@ -410,6 +431,7 @@ function fromRow(r) {
 function loadState() {
   try { meals = JSON.parse(localStorage.getItem(MEALS_KEY)) || []; } catch (e) { meals = []; }
   try { entries = JSON.parse(localStorage.getItem(ENTRIES_KEY)) || []; } catch (e) { entries = []; }
+  goal = Number(localStorage.getItem(GOAL_KEY)) || 0;
 
   // Engangs-migrering fra den gamle flade model (én fødevare pr. registrering)
   if (!meals.length && !entries.length) {
@@ -612,16 +634,17 @@ function mealTotal(mealId) { return mealEntries(mealId).reduce((s, e) => s + e.k
 function render() {
   const loggedIn = isLoggedIn();
 
-  // Totaler
+  // Dagens total
   const mealById = new Map(meals.map(m => [m.id, m]));
-  let todayTotal = 0, allTotal = 0;
+  let todayTotal = 0;
   for (const e of entries) {
-    allTotal += e.kcal;
     const m = mealById.get(e.meal_id);
     if (m && isToday(m.datetime)) todayTotal += e.kcal;
   }
-  document.getElementById('todayTotal').textContent = fmt(todayTotal);
-  document.getElementById('allTotal').textContent = fmt(allTotal);
+  const todayEl = document.getElementById('todayTotal');
+  todayEl.textContent = fmt(todayTotal);
+  // Marker rødt hvis dagens indtag overstiger målet
+  todayEl.classList.toggle('over', goal > 0 && todayTotal > goal);
 
   const mealList = document.getElementById('mealList');
   if (meals.length === 0) {
@@ -809,8 +832,17 @@ document.getElementById('saveSbBtn').addEventListener('click', () => {
   location.reload();
 });
 
+// ---- Dagligt kaloriemål ----
+const goalInput = document.getElementById('goalInput');
+goalInput.addEventListener('input', () => {
+  goal = Number(goalInput.value) || 0;
+  try { localStorage.setItem(GOAL_KEY, String(goal)); } catch (e) {}
+  render();  // opdater rød/grøn markering af dagens total
+});
+
 // ---- Opstart ----
 loadState();
+if (goal > 0) goalInput.value = goal;
 render();
 applyAuthGate();   // start med lukket adgang indtil login er bekræftet
 initSupabase();
