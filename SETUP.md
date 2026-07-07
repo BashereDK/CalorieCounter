@@ -86,6 +86,11 @@ create policy "egne raekker - laes"    on entries for select to authenticated us
 create policy "egne raekker - indsaet" on entries for insert to authenticated with check (auth.uid() = user_id);
 create policy "egne raekker - opdater" on entries for update to authenticated using (auth.uid() = user_id);
 create policy "egne raekker - slet"    on entries for delete to authenticated using (auth.uid() = user_id);
+
+-- Slå live-synkronisering (Realtime) til for tabellen, så ændringer på én
+-- enhed dukker op på dine andre enheder med det samme. RLS gælder også her,
+-- så du får kun dine egne ændringer.
+alter publication supabase_realtime add table entries;
 ```
 
 3. Du skulle gerne se **Success. No rows returned**.
@@ -93,16 +98,18 @@ create policy "egne raekker - slet"    on entries for delete to authenticated us
 **Kontrol:** gå til **Table Editor** → du bør se tabellen `entries`, og øverst
 et lille skjold-ikon der viser at RLS er **enabled**.
 
-> **Har du allerede oprettet tabellen fra en tidligere version?** Kør blot denne
-> ene linje i SQL Editor for at tilføje den nye måltids-kolonne — dine data
-> bevares:
+> **Har du allerede oprettet tabellen fra en tidligere version?** Kør disse
+> to linjer i SQL Editor — dine data bevares. Den første tilføjer måltids-
+> kolonnen; den anden slår live-synkronisering til:
 >
 > ```sql
 > alter table entries add column if not exists meal_id text;
+> alter publication supabase_realtime add table entries;
 > ```
 >
 > Eksisterende registreringer uden `meal_id` vises automatisk som hver deres
-> ét-fødevares måltid.
+> ét-fødevares måltid. (Kører du `add table` og den allerede er tilføjet, får
+> du blot en uskadelig fejl — så er den bare klar i forvejen.)
 
 ---
 
