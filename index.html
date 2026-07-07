@@ -274,6 +274,7 @@
     <div class="preview" id="preview"></div>
 
     <button class="add" id="addBtn">Tilføj registrering</button>
+    <div class="hint" id="addHint" style="display:none; text-align:center; margin-top:10px; cursor:pointer;">🔒 Log ind for at tilføje registreringer</div>
   </div>
 
   <div class="section-title">Registreringer</div>
@@ -422,6 +423,21 @@ function updateAccountUI() {
     loginArea.style.display = 'block';
     signOutBtn.style.display = 'none';
   }
+  applyAuthGate();
+}
+
+// ---- Adgangsstyring: kun loggede-ind brugere kan tilføje ----
+function isLoggedIn() { return !!user; }
+
+function applyAuthGate() {
+  const loggedIn = isLoggedIn();
+  ['food', 'meal', 'kcal100', 'grams'].forEach(id => {
+    document.getElementById(id).disabled = !loggedIn;
+  });
+  const addBtn = document.getElementById('addBtn');
+  addBtn.disabled = !loggedIn;
+  addBtn.style.opacity = loggedIn ? '' : '0.5';
+  document.getElementById('addHint').style.display = loggedIn ? 'none' : 'block';
 }
 
 // ---- Synkronisering ----
@@ -566,6 +582,8 @@ document.getElementById('kcal100').addEventListener('input', updatePreview);
 document.getElementById('grams').addEventListener('input', updatePreview);
 
 document.getElementById('addBtn').addEventListener('click', () => {
+  if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
+
   const food = document.getElementById('food').value.trim();
   const kcal100 = parseFloat(document.getElementById('kcal100').value);
   const grams = parseFloat(document.getElementById('grams').value);
@@ -614,6 +632,7 @@ document.getElementById('settingsBtn').addEventListener('click', () => {
   modalOverlay.classList.add('open');
 });
 document.getElementById('closeModal').addEventListener('click', () => modalOverlay.classList.remove('open'));
+document.getElementById('addHint').addEventListener('click', () => modalOverlay.classList.add('open'));
 document.getElementById('sendLinkBtn').addEventListener('click', sendMagicLink);
 document.getElementById('signOutBtn').addEventListener('click', signOut);
 document.getElementById('exportBtn').addEventListener('click', exportData);
@@ -630,6 +649,7 @@ document.getElementById('saveSbBtn').addEventListener('click', () => {
 // ---- Opstart ----
 loadEntries();
 render();
+applyAuthGate();   // start med lukket adgang indtil login er bekræftet
 initSupabase();
 </script>
 </body>
