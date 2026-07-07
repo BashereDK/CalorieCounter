@@ -551,9 +551,20 @@ function scheduleCloudSave(e) {
 
 async function pushEntry(e) {
   if (!sb || !user) return;
-  const { error } = await sb.from(TABLE).upsert(toRow(e));
-  setSyncStatus(error ? 'off' : 'on',
-    error ? 'Gemmes lokalt (ingen forbindelse)' : 'Synkroniseret ' + nowTime());
+  try {
+    const { error } = await sb.from(TABLE).upsert(toRow(e));
+    if (error) {
+      // API-fejl (fx manglende kolonne eller RLS) — skjul den ikke som "offline"
+      console.error('Sync-fejl (upload):', error);
+      setSyncStatus('off', 'Sync-fejl: ' + error.message);
+    } else {
+      setSyncStatus('on', 'Synkroniseret ' + nowTime());
+    }
+  } catch (err) {
+    // Ægte netværksfejl (offline) — data ligger fortsat lokalt
+    console.error('Netværksfejl (upload):', err);
+    setSyncStatus('off', 'Gemmes lokalt (ingen forbindelse)');
+  }
 }
 
 async function removeRemote(ids) {
@@ -581,7 +592,13 @@ async function pullAll() {
   // Skub lokale fødevarer op, som endnu ikke er i skyen (fx oprettet offline)
   const localOnly = entries.filter(e => !remoteIds.has(e.id));
   if (localOnly.length) {
-    await sb.from(TABLE).upsert(localOnly.map(toRow));
+    const { error: upErr } = await sb.from(TABLE).upsert(localOnly.map(toRow));
+    if (upErr) {
+      console.error('Sync-fejl (upload af lokale registreringer):', upErr);
+      setSyncStatus('off', 'Sync-fejl: ' + upErr.message);
+      render();
+      return;
+    }
   }
 
   // Flet fødevarer: skyen + evt. lokale-kun
