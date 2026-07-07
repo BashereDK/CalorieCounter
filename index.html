@@ -184,6 +184,10 @@
     background: none; border: none; color: var(--danger);
     font-size: 18px; padding: 4px 6px; line-height: 1;
   }
+  .entry .edit {
+    background: none; border: none; color: var(--muted);
+    font-size: 16px; padding: 4px 6px; line-height: 1;
+  }
 
   .day-header {
     display: flex; justify-content: space-between; align-items: baseline;
@@ -352,7 +356,7 @@
 <div class="modal-overlay" id="foodModalOverlay">
   <div class="modal">
     <h2 id="foodModalTitle">Tilføj fødevare</h2>
-    <p>Tilføj de fødevarer der indgår i måltidet — én ad gangen. Du kan blive ved med at tilføje.</p>
+    <p id="foodModalDesc">Tilføj de fødevarer der indgår i måltidet — én ad gangen. Du kan blive ved med at tilføje.</p>
 
     <label for="fFood">Fødevare</label>
     <input id="fFood" type="text" placeholder="F.eks. havregryn, mælk, sukker" autocomplete="off">
@@ -689,6 +693,7 @@ function render() {
                 '<div class="meta">' + e.grams + ' g · ' + e.kcal100 + '/100g</div>' +
               '</div>' +
               '<div class="kcal">' + fmt(e.kcal) + '</div>' +
+              (loggedIn ? '<button class="edit" data-id="' + e.id + '">✎</button>' : '') +
               (loggedIn ? '<button class="del" data-id="' + e.id + '">✕</button>' : '') +
             '</div>';
         }
@@ -701,6 +706,11 @@ function render() {
     }
   }
   mealList.innerHTML = html;
+
+  // Rediger enkelt fødevare
+  mealList.querySelectorAll('.edit').forEach(btn => {
+    btn.addEventListener('click', () => openEditModal(btn.getAttribute('data-id')));
+  });
 
   // Slet enkelt fødevare
   mealList.querySelectorAll('.del').forEach(btn => {
@@ -733,21 +743,60 @@ function render() {
   });
 }
 
-// ---- Fødevare-modal (tilføj fødevare til et bestemt måltid) ----
-let activeMealId = null;
+// ---- Fødevare-modal (tilføj til / rediger en fødevare) ----
+let activeMealId = null;      // måltid der tilføjes til (tilføj-tilstand)
+let editingEntryId = null;    // fødevare der redigeres (redigér-tilstand); null = tilføj
+
+function fFields() {
+  return {
+    food: document.getElementById('fFood').value.trim(),
+    kcal100: parseFloat(document.getElementById('fKcal100').value),
+    grams: parseFloat(document.getElementById('fGrams').value)
+  };
+}
+function setFFields(food, kcal100, grams) {
+  document.getElementById('fFood').value = food || '';
+  document.getElementById('fKcal100').value = (kcal100 == null ? '' : kcal100);
+  document.getElementById('fGrams').value = (grams == null ? '' : grams);
+  updateFoodPreview();
+}
+function validFields(f) {
+  if (!f.food) { alert('Skriv navnet på fødevaren'); return false; }
+  if (isNaN(f.kcal100) || isNaN(f.grams)) { alert('Udfyld kalorier pr. 100g og gram'); return false; }
+  return true;
+}
 
 function openFoodModal(mealId) {
   if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
   const m = findMeal(mealId);
   if (!m) return;
   activeMealId = mealId;
+  editingEntryId = null;
   document.getElementById('foodModalTitle').textContent = 'Tilføj til ' + (m.type || 'måltid');
-  document.getElementById('fFood').value = '';
-  document.getElementById('fKcal100').value = '';
-  document.getElementById('fGrams').value = '';
-  document.getElementById('fPreview').innerHTML = '';
+  document.getElementById('foodModalDesc').textContent = 'Tilføj de fødevarer der indgår i måltidet — én ad gangen. Du kan blive ved med at tilføje.';
+  document.getElementById('fAddBtn').textContent = 'Tilføj til måltidet';
+  setFFields('', null, null);
   foodModalOverlay.classList.add('open');
   setTimeout(() => document.getElementById('fFood').focus(), 50);
+}
+
+function openEditModal(entryId) {
+  if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
+  const e = entries.find(x => x.id === entryId);
+  if (!e) return;
+  activeMealId = e.meal_id;
+  editingEntryId = entryId;
+  document.getElementById('foodModalTitle').textContent = 'Rediger fødevare';
+  document.getElementById('foodModalDesc').textContent = 'Ret oplysningerne og gem ændringerne.';
+  document.getElementById('fAddBtn').textContent = 'Gem ændringer';
+  setFFields(e.food, e.kcal100, e.grams);
+  foodModalOverlay.classList.add('open');
+  setTimeout(() => document.getElementById('fFood').focus(), 50);
+}
+
+function closeFoodModal() {
+  foodModalOverlay.classList.remove('open');
+  editingEntryId = null;
 }
 
 function updateFoodPreview() {
@@ -757,16 +806,17 @@ function updateFoodPreview() {
     ? '= <b>' + fmt(kcal100 * grams / 100) + ' kcal</b>' : '';
 }
 
+function foodModalPrimary() {
+  if (editingEntryId) saveEntryEdit();
+  else addFoodToMeal();
+}
+
 function addFoodToMeal() {
   if (!activeMealId || !isLoggedIn()) return;
-  const food = document.getElementById('fFood').value.trim();
-  const kcal100 = parseFloat(document.getElementById('fKcal100').value);
-  const grams = parseFloat(document.getElementById('fGrams').value);
+  const f = fFields();
+  if (!validFields(f)) return;
 
-  if (!food) { alert('Skriv navnet på fødevaren'); return; }
-  if (isNaN(kcal100) || isNaN(grams)) { alert('Udfyld kalorier pr. 100g og gram'); return; }
-
-  const entry = { id: genId(), meal_id: activeMealId, food, kcal100, grams, kcal: kcal100 * grams / 100 };
+  const entry = { id: genId(), meal_id: activeMealId, food: f.food, kcal100: f.kcal100, grams: f.grams, kcal: f.kcal100 * f.grams / 100 };
   entries.push(entry);
 
   saveLocal();
@@ -774,17 +824,32 @@ function addFoodToMeal() {
   scheduleCloudSave(entry);
 
   // Klar til næste fødevare i samme måltid
-  document.getElementById('fFood').value = '';
-  document.getElementById('fKcal100').value = '';
-  document.getElementById('fGrams').value = '';
-  document.getElementById('fPreview').innerHTML = '';
+  setFFields('', null, null);
   document.getElementById('fFood').focus();
+}
+
+function saveEntryEdit() {
+  if (!isLoggedIn()) return;
+  const e = entries.find(x => x.id === editingEntryId);
+  if (!e) { closeFoodModal(); return; }
+  const f = fFields();
+  if (!validFields(f)) return;
+
+  e.food = f.food;
+  e.kcal100 = f.kcal100;
+  e.grams = f.grams;
+  e.kcal = f.kcal100 * f.grams / 100;
+
+  saveLocal();
+  render();
+  scheduleCloudSave(e);   // upsert på samme id opdaterer rækken i skyen
+  closeFoodModal();
 }
 
 document.getElementById('fKcal100').addEventListener('input', updateFoodPreview);
 document.getElementById('fGrams').addEventListener('input', updateFoodPreview);
-document.getElementById('fAddBtn').addEventListener('click', addFoodToMeal);
-document.getElementById('fCloseBtn').addEventListener('click', () => foodModalOverlay.classList.remove('open'));
+document.getElementById('fAddBtn').addEventListener('click', foodModalPrimary);
+document.getElementById('fCloseBtn').addEventListener('click', closeFoodModal);
 
 // ---- Opret nyt måltid ----
 document.getElementById('newMealBtn').addEventListener('click', () => {
