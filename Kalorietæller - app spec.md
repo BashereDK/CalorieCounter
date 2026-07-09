@@ -15,10 +15,18 @@ Måltidstype – valgliste: Morgen, Middag, Aften, Mellemmåltid, Snack
 Dato/tid – sættes automatisk ved oprettelse af måltidet (ikke redigerbar)
 
 Fødevare (flere pr. måltid)
-Fødevare – fritekst (fx "mælk", "ost")
-Kalorier pr. 100 g – tal, indtastes manuelt
+Fødevare – fritekst (fx "mælk", "ost"), kan også udfyldes ved stregkode-skanning
+Kalorier pr. 100 g – tal, indtastes manuelt eller hentes ved stregkode-skanning
 Gram – tal, indtastes manuelt
 Kalorier (beregnet) – kalorier_pr_100g * gram / 100, skrivebeskyttet/afledt felt
+
+Stregkode-skanning: knappen "📷 Skan stregkode" i fødevare-modalen åbner kameraet
+og aflæser stregkoden. Navn + kcal/100g udfyldes automatisk. Kilde-rækkefølge:
+1) Supabase products-tabel (delt cache, hurtig/offline), 2) Open Food Facts API
+(gratis, ingen nøgle) – og resultatet gemmes derefter i products til næste gang,
+3) manuel indtastning hvis varen ikke findes. iOS Safari mangler det native
+BarcodeDetector-API, så afkodningen sker med ZXing (self-hostet i repo'et, ikke
+CDN). Kamerabilleder behandles lokalt og forlader ikke enheden.
 
 Adgang: kun brugere der er logget ind kan oprette måltider og tilføje fødevarer.
 
@@ -58,6 +66,7 @@ Hostes på GitHub Pages som statisk side (fil skal hedde index.html)
 Kræver et gratis Supabase-projekt med:
 
 En tabel entries (se SQL nedenfor) med Row Level Security slået til
+En tabel products (valgfri) til stregkode-cache – delt katalog: alle indloggede kan læse/bidrage, RLS slået til
 Email-provider aktiveret under Authentication → Providers, og "Confirm email" slået fra (så signUp logger ind uden email-bekræftelse)
 GitHub Pages-URL'en tilføjet under Authentication → URL Configuration (Site URL + Redirect URLs)
 

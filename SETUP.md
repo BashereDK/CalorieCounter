@@ -111,6 +111,43 @@ et lille skjold-ikon der viser at RLS er **enabled**.
 > ét-fødevares måltid. (Kører du `add table` og den allerede er tilføjet, får
 > du blot en uskadelig fejl — så er den bare klar i forvejen.)
 
+### Ekstra tabel til stregkode-skanning (valgfri, men anbefalet)
+
+Vil du kunne **skanne stregkoder** på fødevarer, så navn + kalorier udfyldes
+automatisk, skal du oprette én tabel mere. Appen slår først op i denne tabel
+(hurtigt, virker offline), og henter ellers data fra det gratis
+**Open Food Facts**-API og gemmer resultatet her til næste gang.
+
+Kør denne blok i **SQL Editor**:
+
+```sql
+-- Delt vare-katalog: stregkode -> navn + kalorier pr. 100 g.
+-- Fungerer som cache for Open Food Facts, så gentagne skan er hurtige.
+create table products (
+  barcode    text primary key,
+  name       text,
+  kcal_100   numeric,
+  brand      text,
+  updated_at timestamptz not null default now()
+);
+
+grant usage on schema public to authenticated;
+grant select, insert, update on table products to authenticated;
+
+alter table products enable row level security;
+
+-- Alle indloggede må læse og bidrage til kataloget (data er offentlige
+-- ernæringstal fra Open Food Facts — ikke private).
+create policy "produkter - laes"    on products for select to authenticated using (auth.uid() is not null);
+create policy "produkter - indsaet" on products for insert to authenticated with check (auth.uid() is not null);
+create policy "produkter - opdater" on products for update to authenticated using (auth.uid() is not null);
+```
+
+> Kamera-skanning kræver **HTTPS** (GitHub Pages leverer det automatisk) og at
+> du **tillader kamera-adgang** første gang du trykker 📷 Skan stregkode.
+> Springer du denne tabel over, virker resten af appen upåvirket — du kan bare
+> ikke skanne stregkoder (indtast i stedet manuelt som hidtil).
+
 ---
 
 ## Del 4 – Aktivér login med email + adgangskode
@@ -222,6 +259,12 @@ netop den enhed.
 browserfane) med samme email + adgangskode → dine registreringer dukker op. Det
 bekræfter, at data ligger i skyen og ikke kun lokalt.
 
+**Test stregkode-skanning** (hvis du oprettede `products`-tabellen i Del 3):
+opret et måltid → **+ tilføj fødevare** → **📷 Skan stregkode** → tillad kamera →
+hold mod en vares stregkode. Navn + kcal/100g udfyldes automatisk; tast antal
+gram og **Tilføj til måltidet**. Skanner du samme vare igen, står der *"Hentet
+fra din database"* (den kommer nu fra Supabase i stedet for API'et).
+
 ---
 
 ## Del 8 – Backup
@@ -245,6 +288,8 @@ bekræfter, at data ligger i skyen og ikke kun lokalt.
 | *"new row violates row-level security policy"* | `insert`-policyen mangler, eller `user_id` sættes forkert. Genkør Del 3. |
 | Login glemmes hele tiden | Normalt hvis du bruger privat/inkognito-fane. I almindelig Safari/hjemmeskærm-app huskes sessionen længe. |
 | Kan ikke logge ind i hjemmeskærm-appen | Log ind *inde i appen* med email + adgangskode (hjemmeskærm-appen deler ikke login med Safari, men adgangskode-login virker fint indefra). |
+| 📷 Skan stregkode gør ingenting / kamera starter ikke | Tillad kamera-adgang for siden (Safari: **aA** i adresselinjen → Websteds­indstillinger → Kamera → Tillad). Kræver HTTPS – brug GitHub Pages-URL'en, ikke en lokal `file://`. |
+| *"Vare ikke fundet"* ved skanning | Varen findes ikke i Open Food Facts. Indtast den manuelt – den gemmes så i dit `products`-katalog og genkendes næste gang, hvis du vil tilføje den dertil. |
 
 ---
 

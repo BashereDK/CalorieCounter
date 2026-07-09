@@ -7,7 +7,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Kalorier">
 <title>Kalorietæller</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Pinnet version + Subresource Integrity (SRI): browseren afviser filen hvis CDN'et
+     leverer ændret indhold. Beskytter Supabase-sessionen mod et kompromitteret CDN. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.2"
+        integrity="sha384-sgcvElP/LlNRtORGYFLO/9K/bENcpJK19HgvqslWXog6d8f/Va4TpltGiBlGntCM"
+        crossorigin="anonymous"></script>
+<!-- Stregkode-dekoder (ZXing). Self-hostet i repo'et (ikke CDN), da iOS Safari mangler
+     det native BarcodeDetector-API. Ren client-side: kamerabilleder forlader ikke enheden. -->
+<script src="vendor/zxing.min.js"></script>
 <style>
   :root {
     --bg: #0f1115;
@@ -285,6 +292,10 @@
     max-height: 88vh; overflow-y: auto;
   }
   .modal h2 { font-size: 17px; margin: 0 0 4px; }
+  #scanVideo {
+    width: 100%; max-height: 60vh; border-radius: 12px;
+    background: #000; object-fit: cover; margin: 4px 0 10px;
+  }
   .modal p { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 6px 0 14px; }
   .modal .close {
     display: block; text-align: center; margin-top: 12px;
@@ -400,6 +411,8 @@
 
     <label for="fFood">Fødevare</label>
     <input id="fFood" type="text" placeholder="F.eks. havregryn, mælk, sukker" autocomplete="off">
+    <button class="secondary" id="fScanBtn" style="margin-top:8px;">📷 Skan stregkode</button>
+    <div class="hint" id="fScanHint" style="display:none;"></div>
 
     <div class="row2">
       <div>
@@ -416,6 +429,15 @@
 
     <button class="add" id="fAddBtn">Tilføj til måltidet</button>
     <button class="close" id="fCloseBtn">Færdig</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="scanOverlay">
+  <div class="modal">
+    <h2>Skan stregkode</h2>
+    <video id="scanVideo" playsinline muted></video>
+    <div class="hint" id="scanStatus">Hold kameraet mod stregkoden…</div>
+    <button class="close" id="scanCancelBtn">Annullér</button>
   </div>
 </div>
 
@@ -969,6 +991,7 @@ function setFFields(food, kcal100, grams) {
   document.getElementById('fFood').value = food || '';
   document.getElementById('fKcal100').value = (kcal100 == null ? '' : kcal100);
   document.getElementById('fGrams').value = (grams == null ? '' : grams);
+  document.getElementById('fScanHint').style.display = 'none';
   updateFoodPreview();
 }
 function validFields(f) {
@@ -1008,6 +1031,133 @@ function openEditModal(entryId) {
 function closeFoodModal() {
   foodModalOverlay.classList.remove('open');
   editingEntryId = null;
+}
+
+// ---- Stregkode-skanning ----
+// iOS Safari mangler det native BarcodeDetector-API, så vi bruger ZXing (self-hostet).
+// Opslagsrækkefølge: Supabase-cache → Open Food Facts → manuel indtastning.
+let scanReader = null;    // ZXing BrowserMultiFormatReader
+let scanControls = null;  // controls-objekt fra ZXing til at stoppe kameraet
+
+function scanSupported() {
+  return !!(window.ZXingBrowser && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+// Udfyld felterne fra et produkt, men behold evt. allerede indtastet gram
+function fillFromProduct(name, kcal100) {
+  const gramsRaw = document.getElementById('fGrams').value;
+  const grams = (gramsRaw === '' || isNaN(parseFloat(gramsRaw))) ? null : parseFloat(gramsRaw);
+  const kcal = (kcal100 == null || isNaN(kcal100)) ? null : Math.round(kcal100);
+  setFFields(name || '', kcal, grams);
+  setTimeout(() => document.getElementById('fGrams').focus(), 50);   // klar til at taste gram
+}
+
+function flashScanHint(msg) {
+  const el = document.getElementById('fScanHint');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function openScanner() {
+  if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
+  if (!scanSupported()) {
+    alert('Din browser understøtter ikke kamera-skanning her. Indtast fødevaren manuelt.');
+    return;
+  }
+  const video = document.getElementById('scanVideo');
+  document.getElementById('scanStatus').textContent = 'Hold kameraet mod stregkoden…';
+  document.getElementById('scanOverlay').classList.add('open');
+  try {
+    scanReader = new ZXingBrowser.BrowserMultiFormatReader();
+    scanControls = await scanReader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' } }, audio: false },
+      video,
+      (result, err, controls) => {
+        if (result) {
+          const code = result.getText();
+          try { controls.stop(); } catch (_) {}
+          scanControls = null;
+          stopScanner();
+          lookupBarcode(code);
+        }
+        // 'err' på hver frame uden fund (NotFoundException) er normalt — ignoreres
+      }
+    );
+  } catch (e) {
+    stopScanner();
+    alert('Kunne ikke starte kameraet. Tillad kamera-adgang i browseren og prøv igen.');
+  }
+}
+
+function stopScanner() {
+  if (scanControls) { try { scanControls.stop(); } catch (_) {} scanControls = null; }
+  scanReader = null;
+  const video = document.getElementById('scanVideo');
+  if (video && video.srcObject) {
+    try { video.srcObject.getTracks().forEach(t => t.stop()); } catch (_) {}
+    video.srcObject = null;
+  }
+  document.getElementById('scanOverlay').classList.remove('open');
+}
+
+async function lookupBarcode(barcode) {
+  foodModalOverlay.classList.add('open');   // sikr at fødevare-modalen er i forgrunden
+
+  // 1) Supabase-cache (hurtig, virker offline hvis basen er nået)
+  try {
+    if (sb) {
+      const { data, error } = await sb.from('products')
+        .select('name,kcal_100').eq('barcode', barcode).maybeSingle();
+      if (!error && data) {
+        fillFromProduct(data.name, data.kcal_100);
+        flashScanHint('✓ Hentet fra din database');
+        return;
+      }
+    }
+  } catch (_) { /* falder videre til API'et */ }
+
+  // 2) Open Food Facts (og gem resultatet i cachen til næste gang)
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const resp = await fetch(
+      'https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(barcode) +
+      '.json?fields=product_name,brands,nutriments',
+      { signal: ctrl.signal }
+    );
+    clearTimeout(timer);
+    const json = await resp.json();
+    const p = json && json.product;
+    if (json && json.status === 1 && p) {
+      const name = (p.product_name && p.product_name.trim())
+        || (p.brands ? p.brands.split(',')[0].trim() : '');
+      const n = p.nutriments || {};
+      let kcal100 = n['energy-kcal_100g'];
+      if (kcal100 == null && n['energy-kj_100g'] != null) kcal100 = n['energy-kj_100g'] / 4.184;
+      fillFromProduct(name, kcal100);
+      if (kcal100 == null) flashScanHint('Fandt "' + (name || barcode) + '" – men ingen kalorier. Skriv kcal/100g manuelt.');
+      else flashScanHint('✓ Hentet fra Open Food Facts');
+      if (name || kcal100 != null) cacheProduct(barcode, name, kcal100);
+      return;
+    }
+  } catch (e) {
+    alert('Kunne ikke hente varen (ingen forbindelse?). Indtast den manuelt.');
+    document.getElementById('fFood').focus();
+    return;
+  }
+
+  // 3) Ikke fundet nogen steder
+  alert('Vare med stregkode ' + barcode + ' blev ikke fundet. Indtast den manuelt.');
+  document.getElementById('fFood').focus();
+}
+
+function cacheProduct(barcode, name, kcal100) {
+  if (!sb) return;
+  const row = { barcode: barcode };
+  if (name) row.name = name;
+  if (kcal100 != null && !isNaN(kcal100)) row.kcal_100 = Math.round(kcal100);
+  // fire-and-forget: en fejl her må ikke forstyrre brugeren
+  sb.from('products').upsert(row).then(() => {}, () => {});
 }
 
 function updateFoodPreview() {
@@ -1063,6 +1213,8 @@ document.getElementById('fKcal100').addEventListener('input', updateFoodPreview)
 document.getElementById('fGrams').addEventListener('input', updateFoodPreview);
 document.getElementById('fAddBtn').addEventListener('click', foodModalPrimary);
 document.getElementById('fCloseBtn').addEventListener('click', closeFoodModal);
+document.getElementById('fScanBtn').addEventListener('click', openScanner);
+document.getElementById('scanCancelBtn').addEventListener('click', stopScanner);
 
 // ---- Opret nyt måltid ----
 document.getElementById('newMealBtn').addEventListener('click', () => {
