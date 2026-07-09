@@ -239,7 +239,8 @@ bekræfter, at data ligger i skyen og ikke kun lokalt.
 | Status står på *"Ikke konfigureret"* | URL/anon-nøgle mangler. Tjek Del 5. |
 | *"Email not confirmed"* ved login | *"Confirm email"* er slået til i Supabase. Slå den fra (Del 4, trin 3) og log ind igen. |
 | *"Invalid login credentials"* | Forkert email/adgangskode – eller kontoen findes ikke endnu. Første gang skal du bruge **Opret konto**. |
-| *"User already registered"* ved Opret konto | Kontoen findes allerede. Brug **Log ind** i stedet. Har du glemt adgangskoden, kan du nulstille den under **Authentication → Users** i Supabase. |
+| *"User already registered"* ved Opret konto | Kontoen findes allerede. Brug **Log ind** i stedet. |
+| Gammel konto (oprettet med magic-link) har ingen adgangskode | Er du stadig logget ind på én enhed (grøn prik): åbn **⚙️** → **Sæt / skift adgangskode** → gem. Log så ind med den på dine andre enheder. Er du logget helt ud alle steder, kan du nulstille adgangskoden under **Authentication → Users** i Supabase. |
 | Data vises ikke efter login | Åbn browser-konsollen. Ofte manglende RLS-policies – kør SQL'en i Del 3 igen. |
 | *"new row violates row-level security policy"* | `insert`-policyen mangler, eller `user_id` sættes forkert. Genkør Del 3. |
 | Login glemmes hele tiden | Normalt hvis du bruger privat/inkognito-fane. I almindelig Safari/hjemmeskærm-app huskes sessionen længe. |

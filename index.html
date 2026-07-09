@@ -328,6 +328,13 @@
 
     <div id="accountArea"></div>
 
+    <div id="pwChangeArea" style="display:none;">
+      <label for="newPasswordInput">Sæt / skift adgangskode</label>
+      <input id="newPasswordInput" type="password" autocomplete="new-password" placeholder="ny adgangskode (mindst 6 tegn)">
+      <button class="secondary" id="setPasswordBtn" style="margin-top:10px;">Gem adgangskode</button>
+      <div class="hint" id="pwChangeHint">Har du oprettet kontoen uden adgangskode (gammelt login)? Sæt en her, så kan du logge ind med den på dine andre enheder.</div>
+    </div>
+
     <div id="loginArea">
       <label for="emailInput">Din email</label>
       <input id="emailInput" type="email" inputmode="email" autocomplete="email" placeholder="dig@eksempel.dk">
@@ -559,6 +566,21 @@ async function signUp() {
   }
 }
 
+// Sæt/skift adgangskode på den konto man er logget ind på. Bruges bl.a. til
+// gamle konti oprettet uden adgangskode (magic-link), så de kan bruge password-
+// login på andre enheder.
+async function setPassword() {
+  const password = document.getElementById('newPasswordInput').value;
+  const hint = document.getElementById('pwChangeHint');
+  if (!sb || !user) { hint.textContent = 'Du skal være logget ind for at sætte en adgangskode.'; return; }
+  if (password.length < 6) { hint.textContent = 'Vælg en adgangskode på mindst 6 tegn.'; return; }
+  hint.textContent = 'Gemmer…';
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) { hint.textContent = 'Kunne ikke gemme: ' + error.message; return; }
+  document.getElementById('newPasswordInput').value = '';
+  hint.textContent = 'Adgangskode gemt. Brug den + din email til at logge ind på dine andre enheder.';
+}
+
 async function signOut() {
   if (sb) await sb.auth.signOut();
   user = null;
@@ -577,11 +599,13 @@ function updateAccountUI() {
       '<div class="email">' + escapeHtml(user.email || '') + '</div></div>';
     loginArea.style.display = 'none';
     signOutBtn.style.display = 'block';
+    document.getElementById('pwChangeArea').style.display = 'block';
     document.getElementById('passwordInput').value = '';
   } else {
     area.innerHTML = '';
     loginArea.style.display = 'block';
     signOutBtn.style.display = 'none';
+    document.getElementById('pwChangeArea').style.display = 'none';
   }
   applyAuthGate();
 }
@@ -1022,6 +1046,8 @@ document.getElementById('addHint').addEventListener('click', () => modalOverlay.
 document.getElementById('signInBtn').addEventListener('click', signIn);
 document.getElementById('signUpBtn').addEventListener('click', signUp);
 document.getElementById('passwordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
+document.getElementById('setPasswordBtn').addEventListener('click', setPassword);
+document.getElementById('newPasswordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') setPassword(); });
 document.getElementById('signOutBtn').addEventListener('click', signOut);
 document.getElementById('exportBtn').addEventListener('click', exportData);
 document.getElementById('saveSbBtn').addEventListener('click', () => {
