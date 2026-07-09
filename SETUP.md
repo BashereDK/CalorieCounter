@@ -113,13 +113,32 @@ et lille skjold-ikon der viser at RLS er **enabled**.
 
 ---
 
-## Del 4 – Aktivér email-login (magic link)
+## Del 4 – Aktivér email-login (kode + link)
 
 1. Gå til **Authentication** → **Sign In / Providers** (eller **Providers**).
 2. Sørg for at **Email** er slået til. Magic link er aktiveret som standard.
    - Du kan slå **Confirm email** til – det er fint; magic-linket bekræfter
      samtidig emailen.
-3. Gå til **Authentication** → **URL Configuration**:
+3. **Vis login-koden i mailen (vigtigt for iPhone-appen).** Gå til
+   **Authentication** → **Emails** → skabelonen **Magic Link**. Tilføj kodens
+   variabel `{{ .Token }}` i teksten, så mailen både har et link *og* en
+   6-cifret kode. Fx:
+
+   ```html
+   <h2>Log ind i Kalorietæller</h2>
+   <p>Din login-kode er: <b>{{ .Token }}</b></p>
+   <p>Eller tryk på linket (virker kun i samme browser):
+      <a href="{{ .ConfirmationURL }}">Log ind</a></p>
+   ```
+
+   > **Hvorfor?** En web-app lagt på iPhone-hjemmeskærmen kører i sit eget
+   > lukkede rum og deler ikke login med Safari. Et link fra Mail åbner altid i
+   > Safari – ikke i hjemmeskærm-appen – så sessionen havner det forkerte sted.
+   > Med en **kode** taster du dig ind uden at forlade appen, og det virker ens
+   > på telefon og computer. Uden `{{ .Token }}` i skabelonen står kodefeltet i
+   > appen tomt.
+
+4. Gå til **Authentication** → **URL Configuration**:
    - **Site URL:** sæt til din kommende GitHub Pages-URL (se Del 6). Kender du
      den ikke endnu, så udfyld den her bagefter.
    - **Redirect URLs:** klik **Add URL** og tilføj den samme URL.
@@ -200,13 +219,18 @@ netop den enhed.
 ## Del 7 – Test og tilføj til hjemmeskærmen
 
 1. Åbn din GitHub Pages-URL i **Safari på iPhone**.
-2. Tryk **⚙️** → skriv din email → **Send login-link**.
-3. Åbn mailen på telefonen, tryk linket → du sendes tilbage til appen og er
-   logget ind. Status-prikken øverst bliver grøn: *"Synkroniseret …"*.
-4. Opret en registrering. Åbn **Table Editor** i Supabase → du bør se rækken i
+2. **Tilføj til hjemmeskærm først:** tryk Del-knappen i Safari → **Føj til
+   hjemmeskærm**. Åbn så appen fra det nye ikon – den kører nu i fuldskærm som
+   en rigtig app.
+3. I appen: tryk **⚙️** → skriv din email → **Send login-kode**.
+4. Åbn mailen på telefonen, læs den **6-cifrede kode**, skift tilbage til appen
+   og indtast koden → **Log ind**. Status-prikken øverst bliver grøn:
+   *"Synkroniseret …"*.
+   - Fordi du logger ind med en kode *inde i* hjemmeskærm-appen, lander
+     sessionen det rigtige sted. Et link i mailen ville åbne i Safari og virke
+     dér i stedet – derfor bruger vi koden.
+5. Opret en registrering. Åbn **Table Editor** i Supabase → du bør se rækken i
    `entries` med dit `user_id`.
-5. **Tilføj til hjemmeskærm:** tryk Del-knappen i Safari → **Føj til
-   hjemmeskærm**. Nu åbner appen i fuldskærm som en rigtig app.
 
 **Test at data overlever:** log ind på en anden enhed (eller en privat
 browserfane) med samme email → dine registreringer dukker op. Det bekræfter,
@@ -232,6 +256,8 @@ at data ligger i skyen og ikke kun lokalt.
 | Data vises ikke efter login | Åbn browser-konsollen. Ofte manglende RLS-policies – kør SQL'en i Del 3 igen. |
 | *"new row violates row-level security policy"* | `insert`-policyen mangler, eller `user_id` sættes forkert. Genkør Del 3. |
 | Login glemmes hele tiden | Normalt hvis du bruger privat/inkognito-fane. I almindelig Safari huskes sessionen længe. |
+| Kan ikke logge ind i hjemmeskærm-appen, selvom Safari er logget ind | Hjemmeskærm-appen har sit eget login-rum. Log ind *inde i appen* med **koden** fra mailen (ikke linket). Mangler kodefeltet en kode, så tilføj `{{ .Token }}` til Magic Link-skabelonen (Del 4). |
+| Kodefeltet i appen er tomt / mailen har kun et link | Email-skabelonen mangler `{{ .Token }}`. Tilføj den under **Authentication → Emails → Magic Link** (Del 4). |
 
 ---
 
