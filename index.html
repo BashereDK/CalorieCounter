@@ -197,6 +197,34 @@
   }
   .day-header .day-total { color: var(--accent2); font-weight: 700; font-size: 13px; }
 
+  .prev-days { margin-top: 6px; }
+  .prev-days > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--muted);
+    font-size: 13px; font-weight: 600;
+    user-select: none;
+  }
+  .prev-days > summary::-webkit-details-marker { display: none; }
+  .prev-days > summary .prev-label::before {
+    content: '▸';
+    display: inline-block;
+    margin-right: 8px;
+    color: var(--muted);
+    transition: transform .15s ease;
+  }
+  .prev-days[open] > summary .prev-label::before { transform: rotate(90deg); }
+  .prev-days > summary .day-total { color: var(--accent2); font-weight: 700; }
+  .prev-days[open] > summary {
+    border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+  }
+  .prev-days-body { padding-top: 8px; }
+
   .empty {
     text-align: center;
     color: var(--muted);
@@ -410,6 +438,7 @@ const PENDING_KEY = 'kalorie_pending_v1';
 const TABLE = 'entries';
 
 let goal = 0;   // dagligt kaloriemål (0 = ikke sat)
+let prevDaysOpen = false;  // er boksen med tidligere dage foldet ud?
 
 // Id'er på fødevarer der er oprettet/ændret lokalt, men endnu ikke bekræftet i
 // skyen. Kun disse skubbes op ved sync. Lokale registreringer der IKKE er
@@ -824,13 +853,13 @@ function render() {
     currentDay.total += mealTotal(m.id);
   }
 
-  let html = '';
-  for (const g of groups) {
-    html += '<div class="day-header"><span>' + g.label + '</span><span class="day-total">' + fmt(g.total) + ' kcal</span></div>';
+  // Render en enkelt dag-gruppe (dag-header + dens måltidskort)
+  function renderGroup(g) {
+    let out = '<div class="day-header"><span>' + g.label + '</span><span class="day-total">' + fmt(g.total) + ' kcal</span></div>';
     for (const m of g.meals) {
       const items = mealEntries(m.id);
-      html += '<div class="meal-card">';
-      html += '<div class="meal-card-head">' +
+      out += '<div class="meal-card">';
+      out += '<div class="meal-card-head">' +
                 '<span class="meal-tag meal-' + (m.type || 'Snack') + '">' + escapeHtml(m.type || '') + '</span>' +
                 '<span class="meal-time">' + timeLabel(m.datetime) + '</span>' +
                 '<span class="meal-kcal">' + fmt(mealTotal(m.id)) + ' kcal</span>' +
@@ -838,10 +867,10 @@ function render() {
               '</div>';
 
       if (items.length === 0) {
-        html += '<div class="empty-meal">Ingen fødevarer endnu</div>';
+        out += '<div class="empty-meal">Ingen fødevarer endnu</div>';
       } else {
         for (const e of items) {
-          html +=
+          out +=
             '<div class="entry">' +
               '<div class="info">' +
                 '<div class="food">' + escapeHtml(e.food) + '</div>' +
@@ -855,12 +884,37 @@ function render() {
       }
 
       if (loggedIn) {
-        html += '<button class="add-food" data-meal="' + m.id + '">+ tilføj fødevare</button>';
+        out += '<button class="add-food" data-meal="' + m.id + '">+ tilføj fødevare</button>';
       }
-      html += '</div>';
+      out += '</div>';
     }
+    return out;
+  }
+
+  // Nyeste dag vises fuldt; alle forrige dage samles i en foldbar boks
+  let html = renderGroup(groups[0]);
+  if (groups.length > 1) {
+    const prev = groups.slice(1);
+    const prevDays = prev.length;
+    const prevTotal = prev.reduce((sum, g) => sum + g.total, 0);
+    const openAttr = prevDaysOpen ? ' open' : '';
+    html += '<details class="prev-days"' + openAttr + '>' +
+              '<summary>' +
+                '<span class="prev-label">Tidligere dage (' + prevDays + ')</span>' +
+                '<span class="day-total">' + fmt(prevTotal) + ' kcal</span>' +
+              '</summary>' +
+              '<div class="prev-days-body">' +
+                prev.map(renderGroup).join('') +
+              '</div>' +
+            '</details>';
   }
   mealList.innerHTML = html;
+
+  // Husk om boksen med tidligere dage er foldet ud (så re-render ikke lukker den)
+  const detailsEl = mealList.querySelector('.prev-days');
+  if (detailsEl) {
+    detailsEl.addEventListener('toggle', () => { prevDaysOpen = detailsEl.open; });
+  }
 
   // Rediger enkelt fødevare
   mealList.querySelectorAll('.edit').forEach(btn => {
