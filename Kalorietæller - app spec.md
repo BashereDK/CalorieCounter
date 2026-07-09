@@ -42,7 +42,7 @@ Lokalt: data caches i browserens localStorage, så appen virker offline og loade
 Bemærk: localStorage er KUN en cache — iOS Safari kan slette den efter ~7 dages inaktivitet. Den permanente kopi lever i skyen.
 Cloud (kilde til sandhed): Supabase (hostet Postgres) med login → data ligger server-side og går ikke tabt
 
-Login: email-kode via Supabase Auth (signInWithOtp sender koden, verifyOtp bekræfter) — ingen adgangskode, session huskes længe via refresh-token. Mailen indeholder både en 6-cifret kode og et magic-link; koden bruges, fordi et link fra Mail på iOS åbner i Safari og ikke i hjemmeskærm-appen (som har sit eget login-rum). Kræver at email-skabelonen viser {{ .Token }}.
+Login: email + adgangskode via Supabase Auth (signUp opretter konto, signInWithPassword logger ind) — session huskes længe via refresh-token. Adgangskode bruges frem for magic-link/kode, fordi et link fra Mail på iOS åbner i Safari og ikke i hjemmeskærm-appen (som har sit eget login-rum), og fordi kode-i-mail kræver custom SMTP. Adgangskode-login sker helt inde i appen. Kræver at "Confirm email" er slået fra i Supabase, så signUp logger ind med det samme.
 Tabel: entries med kolonner id, user_id, meal_id, datetime, food, meal, kcal_100, grams, kcal
 (meal_id grupperer fødevarer i samme måltid; datetime + meal er måltidets tid/type, denormaliseret på hver fødevare. Tomme måltider uden fødevarer lever kun lokalt indtil første fødevare tilføjes.)
 Row Level Security (RLS): hver bruger kan kun se/redigere rækker hvor user_id = auth.uid()
@@ -58,7 +58,7 @@ Hostes på GitHub Pages som statisk side (fil skal hedde index.html)
 Kræver et gratis Supabase-projekt med:
 
 En tabel entries (se SQL nedenfor) med Row Level Security slået til
-Email-login aktiveret under Authentication → Providers, og Magic Link-skabelonen (Authentication → Emails) udvidet med {{ .Token }} så koden vises i mailen
+Email-provider aktiveret under Authentication → Providers, og "Confirm email" slået fra (så signUp logger ind uden email-bekræftelse)
 GitHub Pages-URL'en tilføjet under Authentication → URL Configuration (Site URL + Redirect URLs)
 
 

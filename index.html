@@ -331,13 +331,13 @@
     <div id="loginArea">
       <label for="emailInput">Din email</label>
       <input id="emailInput" type="email" inputmode="email" autocomplete="email" placeholder="dig@eksempel.dk">
-      <button class="secondary" id="sendLinkBtn" style="margin-top:10px;">Send login-kode</button>
-      <div id="codeArea" style="display:none; margin-top:12px;">
-        <label for="codeInput">Kode fra mailen</label>
-        <input id="codeInput" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" placeholder="6-cifret kode">
-        <button class="secondary" id="verifyCodeBtn" style="margin-top:10px;">Log ind</button>
+      <label for="passwordInput">Adgangskode</label>
+      <input id="passwordInput" type="password" autocomplete="current-password" placeholder="mindst 6 tegn">
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="secondary" id="signInBtn" style="flex:1;">Log ind</button>
+        <button class="secondary" id="signUpBtn" style="flex:1;">Opret konto</button>
       </div>
-      <div class="hint" id="loginHint"></div>
+      <div class="hint" id="loginHint">Første gang: skriv email + en selvvalgt adgangskode og tryk <b>Opret konto</b>. Derefter bruger du <b>Log ind</b>.</div>
     </div>
 
     <button class="secondary" id="signOutBtn" style="display:none; color: var(--danger);">Log ud</button>
@@ -510,47 +510,53 @@ function initSupabase() {
   });
 }
 
-// ---- Login (kode pr. email) ----
-// Vi bruger en kode i stedet for kun et link, fordi et link fra Mail på iOS
-// altid åbner i Safari — ikke i appen på hjemmeskærmen (den har sit eget
-// lukkede login-rum). En kode kan tastes ind uden at forlade appen.
-async function sendMagicLink() {
-  const email = document.getElementById('emailInput').value.trim();
-  const hint = document.getElementById('loginHint');
-  if (!sb) { hint.textContent = 'Konfigurer Supabase-forbindelsen først (se Avanceret).'; return; }
-  if (!email) { hint.textContent = 'Skriv din email.'; return; }
-  hint.textContent = 'Sender kode…';
-  const { error } = await sb.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.href.split('#')[0] }
-  });
-  if (error) { hint.textContent = 'Fejl: ' + error.message; return; }
-  document.getElementById('codeArea').style.display = 'block';
-  document.getElementById('sendLinkBtn').textContent = 'Send ny kode';
-  const codeInput = document.getElementById('codeInput');
-  codeInput.value = '';
-  codeInput.focus();
-  hint.textContent = 'Tjek din mail og indtast den 6-cifrede kode her. '
-    + '(Du kan også trykke på linket i mailen, hvis du åbner appen i Safari.)';
+// ---- Login (email + adgangskode) ----
+// Vi bruger adgangskode i stedet for magic-link/kode, fordi et link fra Mail på
+// iOS altid åbner i Safari — ikke i appen på hjemmeskærmen (den har sit eget
+// lukkede login-rum) — og fordi Supabases gratis-mail ikke tillader at vise en
+// kode i mailen uden custom SMTP. Adgangskode-login sker helt inde i appen.
+function loginFields() {
+  return {
+    email: document.getElementById('emailInput').value.trim(),
+    password: document.getElementById('passwordInput').value,
+    hint: document.getElementById('loginHint')
+  };
 }
 
-async function verifyCode() {
-  const email = document.getElementById('emailInput').value.trim();
-  const token = document.getElementById('codeInput').value.trim();
-  const hint = document.getElementById('loginHint');
+async function signIn() {
+  const { email, password, hint } = loginFields();
   if (!sb) { hint.textContent = 'Konfigurer Supabase-forbindelsen først (se Avanceret).'; return; }
   if (!email) { hint.textContent = 'Skriv din email.'; return; }
-  if (!token) { hint.textContent = 'Indtast koden fra mailen.'; return; }
+  if (!password) { hint.textContent = 'Skriv din adgangskode.'; return; }
   hint.textContent = 'Logger ind…';
-  const { error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+  const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) {
-    hint.textContent = 'Forkert eller udløbet kode: ' + error.message;
+    hint.textContent = 'Kunne ikke logge ind: ' + error.message
+      + ' (Første gang? Tryk "Opret konto".)';
     return;
   }
   // onAuthStateChange overtager herfra (pullAll, realtime, UI).
-  document.getElementById('codeArea').style.display = 'none';
-  document.getElementById('sendLinkBtn').textContent = 'Send login-kode';
   hint.textContent = '';
+}
+
+async function signUp() {
+  const { email, password, hint } = loginFields();
+  if (!sb) { hint.textContent = 'Konfigurer Supabase-forbindelsen først (se Avanceret).'; return; }
+  if (!email) { hint.textContent = 'Skriv din email.'; return; }
+  if (password.length < 6) { hint.textContent = 'Vælg en adgangskode på mindst 6 tegn.'; return; }
+  hint.textContent = 'Opretter konto…';
+  const { data, error } = await sb.auth.signUp({ email, password });
+  if (error) { hint.textContent = 'Kunne ikke oprette konto: ' + error.message; return; }
+  if (data && data.session) {
+    // "Confirm email" er slået fra → vi er logget ind med det samme.
+    hint.textContent = '';
+  } else {
+    // "Confirm email" er slået til → Supabase kræver bekræftelse via mail,
+    // hvilket rammer Safari-problemet igen. Bed brugeren slå det fra.
+    hint.textContent = 'Konto oprettet, men email-bekræftelse er slået til i '
+      + 'Supabase. Slå "Confirm email" fra (Authentication → Providers → Email), '
+      + 'og tryk så "Log ind".';
+  }
 }
 
 async function signOut() {
@@ -571,6 +577,7 @@ function updateAccountUI() {
       '<div class="email">' + escapeHtml(user.email || '') + '</div></div>';
     loginArea.style.display = 'none';
     signOutBtn.style.display = 'block';
+    document.getElementById('passwordInput').value = '';
   } else {
     area.innerHTML = '';
     loginArea.style.display = 'block';
@@ -1012,9 +1019,9 @@ document.getElementById('settingsBtn').addEventListener('click', () => {
 });
 document.getElementById('closeModal').addEventListener('click', () => modalOverlay.classList.remove('open'));
 document.getElementById('addHint').addEventListener('click', () => modalOverlay.classList.add('open'));
-document.getElementById('sendLinkBtn').addEventListener('click', sendMagicLink);
-document.getElementById('verifyCodeBtn').addEventListener('click', verifyCode);
-document.getElementById('codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyCode(); });
+document.getElementById('signInBtn').addEventListener('click', signIn);
+document.getElementById('signUpBtn').addEventListener('click', signUp);
+document.getElementById('passwordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
 document.getElementById('signOutBtn').addEventListener('click', signOut);
 document.getElementById('exportBtn').addEventListener('click', exportData);
 document.getElementById('saveSbBtn').addEventListener('click', () => {
