@@ -28,10 +28,19 @@ og aflæser stregkoden. Navn + kcal/100g udfyldes automatisk. Kilde-rækkefølge
 BarcodeDetector-API, så afkodningen sker med ZXing (self-hostet i repo'et, ikke
 CDN). Kamerabilleder behandles lokalt og forlader ikke enheden.
 
-Adgang: kun brugere der er logget ind kan oprette måltider og tilføje fødevarer.
+Vægt (én registrering pr. dag)
+Dato – sættes automatisk til dagen i dag (datoen er nøglen, ikke et løbenummer)
+Kg – tal, indtastes manuelt. Registrerer man igen samme dag, opdateres dagens vægt
+i stedet for at oprette en ny linje.
+
+Adgang: kun brugere der er logget ind kan oprette måltider, tilføje fødevarer og registrere vægt.
 
 
 Visning
+
+Appen har to faner nederst: Kalorier og Vægt.
+
+Kalorier-fanen:
 
 Total kalorier i dag og i alt, øverst
 
@@ -44,6 +53,18 @@ Knap på hvert kort til at tilføje flere fødevarer til måltidet
 
 Mulighed for at slette en enkelt fødevare eller hele måltidet
 
+Vægt-fanen:
+
+Seneste vægt vist stort, med dato
+
+Graf over udviklingen: hver registrering er et datapunkt, og ovenpå tegnes en linje
+med det glidende gennemsnit (trailing, 7 registreringer). Dag-til-dag-udsving i vægt
+er for en stor del vand — trend-linjen er signalet. X-aksen følger datoen, så en pause
+i registreringerne også ses som et hul. Grafen er ren inline SVG (intet bibliotek) og
+vises først ved mindst to registreringer.
+
+Historik med alle registreringer (nyeste øverst), som kan slettes enkeltvis
+
 Lagring og synkronisering
 
 Lokalt: data caches i browserens localStorage, så appen virker offline og loader hurtigt
@@ -53,6 +74,9 @@ Cloud (kilde til sandhed): Supabase (hostet Postgres) med login → data ligger 
 Login: email + adgangskode via Supabase Auth (signUp opretter konto, signInWithPassword logger ind) — session huskes længe via refresh-token. Adgangskode bruges frem for magic-link/kode, fordi et link fra Mail på iOS åbner i Safari og ikke i hjemmeskærm-appen (som har sit eget login-rum), og fordi kode-i-mail kræver custom SMTP. Adgangskode-login sker helt inde i appen. Kræver at "Confirm email" er slået fra i Supabase, så signUp logger ind med det samme.
 Tabel: entries med kolonner id, user_id, meal_id, datetime, food, meal, kcal_100, grams, kcal
 (meal_id grupperer fødevarer i samme måltid; datetime + meal er måltidets tid/type, denormaliseret på hver fødevare. Tomme måltider uden fødevarer lever kun lokalt indtil første fødevare tilføjes.)
+Tabel: weights med kolonner user_id, date, kg — primærnøgle (user_id, date), så en upsert af
+samme dag fra to enheder rammer den samme række og aldrig giver dubletter. Vægt synkroniseres
+ved login/app-start (ikke via Realtime; den ændrer sig sjældent).
 Row Level Security (RLS): hver bruger kan kun se/redigere rækker hvor user_id = auth.uid()
 Debounced upsert (ca. 800 ms efter ændring) + fuld pull ved login (fletter lokale-kun registreringer op i skyen)
 Eksport til JSON-fil som ekstra manuel backup (tandhjul-ikon)
@@ -66,6 +90,7 @@ Hostes på GitHub Pages som statisk side (fil skal hedde index.html)
 Kræver et gratis Supabase-projekt med:
 
 En tabel entries (se SQL nedenfor) med Row Level Security slået til
+En tabel weights til vægt-sporing – privat pr. bruger, RLS slået til (uden den gemmes vægt kun lokalt)
 En tabel products (valgfri) til stregkode-cache – delt katalog: alle indloggede kan læse/bidrage, RLS slået til
 Email-provider aktiveret under Authentication → Providers, og "Confirm email" slået fra (så signUp logger ind uden email-bekræftelse)
 GitHub Pages-URL'en tilføjet under Authentication → URL Configuration (Site URL + Redirect URLs)

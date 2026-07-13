@@ -54,6 +54,31 @@
   }
   main { padding: 16px; max-width: 560px; margin: 0 auto; }
 
+  /* Faner: kun det aktive view vises */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 6;
+  }
+  .tabbar .tab {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: none; border: none;
+    color: var(--muted);
+    font-size: 10px; font-weight: 600;
+    font-family: inherit;
+    padding: 8px 0 6px;
+    letter-spacing: 0.3px;
+  }
+  .tabbar .tab .icon { font-size: 19px; line-height: 1; }
+  .tabbar .tab.active { color: var(--accent); }
+
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -94,6 +119,29 @@
   .goal-input::placeholder { color: var(--muted); }
   .goal-input::-webkit-outer-spin-button,
   .goal-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+  .weight-now { font-size: 28px; font-weight: 700; color: var(--accent); }
+  .sub-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .chart { width: 100%; height: auto; display: block; margin: 14px 0 4px; }
+  .weight-input { display: flex; gap: 10px; margin-top: 14px; }
+  .weight-input input { flex: 1; }
+  .weight-input button { width: auto; padding: 12px 22px; }
+
+  /* Beholder til en liste af rækker: kortets ramme, men uden egen padding (som .meal-card) */
+  .list-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .weight-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .weight-row:last-child { border-bottom: none; }
+  .weight-row .w-date { flex: 1; color: var(--muted); font-size: 13px; }
+  .weight-row .w-kg { font-size: 15px; font-weight: 700; }
 
   label { display:block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
   label:first-child { margin-top: 0; }
@@ -273,7 +321,8 @@
     text-align: center;
     color: var(--muted);
     font-size: 11px;
-    padding: 20px 16px 30px;
+    /* Ekstra luft i bunden, så teksten ikke ender bag den faste fane-bjælke */
+    padding: 20px 16px calc(88px + env(safe-area-inset-bottom));
   }
 
   .modal-overlay {
@@ -327,36 +376,64 @@
 </header>
 
 <main>
-  <div class="card totals">
-    <div class="total-box">
-      <div class="num" id="todayTotal">0</div>
-      <div class="lbl">I dag</div>
+  <section class="view active" id="viewKcal">
+    <div class="card totals">
+      <div class="total-box">
+        <div class="num" id="todayTotal">0</div>
+        <div class="lbl">I dag</div>
+      </div>
+      <div class="total-box">
+        <input class="num goal-input" id="goalInput" type="number" inputmode="numeric" placeholder="–">
+        <div class="lbl">Mål / dag</div>
+      </div>
     </div>
-    <div class="total-box">
-      <input class="num goal-input" id="goalInput" type="number" inputmode="numeric" placeholder="–">
-      <div class="lbl">Mål / dag</div>
+
+    <div class="card">
+      <label for="mealType">Nyt måltid</label>
+      <select id="mealType">
+        <option value="Morgen">Morgen</option>
+        <option value="Middag">Middag</option>
+        <option value="Aften">Aften</option>
+        <option value="Mellemmåltid">Mellemmåltid</option>
+        <option value="Snack">Snack</option>
+      </select>
+
+      <button class="add" id="newMealBtn" style="margin-top:14px;">➕ Opret måltid</button>
+      <div class="hint" id="addHint" style="display:none; text-align:center; margin-top:10px; cursor:pointer;">🔒 Log ind for at tilføje registreringer</div>
     </div>
-  </div>
 
-  <div class="card">
-    <label for="mealType">Nyt måltid</label>
-    <select id="mealType">
-      <option value="Morgen">Morgen</option>
-      <option value="Middag">Middag</option>
-      <option value="Aften">Aften</option>
-      <option value="Mellemmåltid">Mellemmåltid</option>
-      <option value="Snack">Snack</option>
-    </select>
+    <div class="section-title">Måltider</div>
+    <div id="mealList">
+      <div class="empty" id="emptyMsg">Ingen måltider endnu</div>
+    </div>
+  </section>
 
-    <button class="add" id="newMealBtn" style="margin-top:14px;">➕ Opret måltid</button>
-    <div class="hint" id="addHint" style="display:none; text-align:center; margin-top:10px; cursor:pointer;">🔒 Log ind for at tilføje registreringer</div>
-  </div>
+  <section class="view" id="viewWeight">
+    <div class="card">
+      <div class="weight-now" id="weightNow">–</div>
+      <div class="sub-lbl" id="weightSubLbl">Ingen vægt registreret endnu</div>
 
-  <div class="section-title">Måltider</div>
-  <div id="mealList">
-    <div class="empty" id="emptyMsg">Ingen måltider endnu</div>
-  </div>
+      <svg class="chart" id="weightChart" viewBox="0 0 320 140" style="display:none;" aria-hidden="true"></svg>
+
+      <div class="weight-input">
+        <input id="wKg" type="text" inputmode="decimal" autocomplete="off" placeholder="kg, f.eks. 82,4">
+        <button class="secondary" id="wAddBtn">Gem</button>
+      </div>
+      <div class="hint" id="wHint">Én registrering pr. dag — gemmer du igen i dag, opdateres dagens vægt.</div>
+      <div class="hint" id="wLoginHint" style="display:none; text-align:center; margin-top:10px; cursor:pointer;">🔒 Log ind for at registrere din vægt</div>
+    </div>
+
+    <div class="section-title">Historik</div>
+    <div class="list-card" id="weightList">
+      <div class="empty">Ingen vægt registreret endnu</div>
+    </div>
+  </section>
 </main>
+
+<nav class="tabbar">
+  <button class="tab active" data-tab="kcal"><span class="icon">🍽️</span><span>Kalorier</span></button>
+  <button class="tab" data-tab="weight"><span class="icon">⚖️</span><span>Vægt</span></button>
+</nav>
 
 <footer>Data gemmes lokalt og synkroniseres til din private cloud-database, når du er logget ind</footer>
 
@@ -457,7 +534,11 @@ const ENTRIES_KEY = 'kalorie_entries_v2';
 const OLD_ENTRIES_KEY = 'kalorie_entries_v1';
 const GOAL_KEY    = 'kalorie_goal_v1';
 const PENDING_KEY = 'kalorie_pending_v1';
+const WEIGHTS_KEY = 'kalorie_weights_v1';
+const WEIGHTS_PENDING_KEY = 'kalorie_weights_pending_v1';
+const TAB_KEY     = 'kalorie_tab_v1';
 const TABLE = 'entries';
+const WEIGHT_TABLE = 'weights';
 
 let goal = 0;   // dagligt kaloriemål (0 = ikke sat)
 let prevDaysOpen = false;  // er boksen med tidligere dage foldet ud?
@@ -477,6 +558,15 @@ let pendingIds = new Set();
 // får deres første fødevare.
 let meals = [];
 let entries = [];
+
+// Vægt: én registrering pr. dag → datoen ER nøglen, der er ingen id.
+//   weights[] = { date: 'ÅÅÅÅ-MM-DD', kg }
+// Samme model i skyen (primærnøgle user_id + date), så en upsert af samme dag fra
+// to enheder rammer den samme række i stedet for at lave dubletter.
+let weights = [];
+let pendingWeightDates = new Set();
+let weightSaveTimer = null;
+
 let sb = null;          // Supabase-klient
 let user = null;        // Aktuel bruger (eller null)
 let saveTimer = null;
@@ -505,7 +595,15 @@ function fromRow(r) {
 function loadState() {
   try { meals = JSON.parse(localStorage.getItem(MEALS_KEY)) || []; } catch (e) { meals = []; }
   try { entries = JSON.parse(localStorage.getItem(ENTRIES_KEY)) || []; } catch (e) { entries = []; }
+  try { weights = JSON.parse(localStorage.getItem(WEIGHTS_KEY)) || []; } catch (e) { weights = []; }
   goal = Number(localStorage.getItem(GOAL_KEY)) || 0;
+
+  const rawWeightPending = localStorage.getItem(WEIGHTS_PENDING_KEY);
+  if (rawWeightPending == null) {
+    pendingWeightDates = new Set(weights.map(w => w.date));   // første kørsel: skub alt op
+  } else {
+    try { pendingWeightDates = new Set(JSON.parse(rawWeightPending) || []); } catch (e) { pendingWeightDates = new Set(); }
+  }
 
   // Pending-sæt. Findes det ikke endnu (første kørsel med denne version), antag
   // at alt eksisterende lokalt data er usynkroniseret og skub det op — så mister
@@ -537,6 +635,8 @@ function saveLocal() {
     localStorage.setItem(MEALS_KEY, JSON.stringify(meals));
     localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
     localStorage.setItem(PENDING_KEY, JSON.stringify([...pendingIds]));
+    localStorage.setItem(WEIGHTS_KEY, JSON.stringify(weights));
+    localStorage.setItem(WEIGHTS_PENDING_KEY, JSON.stringify([...pendingWeightDates]));
   } catch (e) { /* localStorage kan være fuld/blokeret; data ligger fortsat i skyen */ }
 }
 
@@ -560,6 +660,7 @@ function initSupabase() {
     updateAccountUI();
     if (user) {
       pullAll();
+      pullWeights();
       subscribeRealtime();   // live-opdateringer fra andre enheder
     } else {
       unsubscribeRealtime();
@@ -671,7 +772,8 @@ function applyAuthGate() {
   newMealBtn.disabled = !loggedIn;
   newMealBtn.style.opacity = loggedIn ? '' : '0.5';
   document.getElementById('addHint').style.display = loggedIn ? 'none' : 'block';
-  render();  // vis/skjul tilføj- og slet-knapper afhængigt af login
+  render();        // vis/skjul tilføj- og slet-knapper afhængigt af login
+  renderWeight();  // låser også vægt-feltet op/i
 }
 
 // ---- Synkronisering ----
@@ -756,6 +858,85 @@ async function pullAll() {
   saveLocal();
   render();
   setSyncStatus('on', 'Synkroniseret ' + nowTime());
+}
+
+// ---- Synkronisering af vægt ----
+// Samme mønster som fødevarerne, men nøglen er datoen. Fejler kaldene (typisk fordi
+// 'weights'-tabellen ikke er oprettet endnu), gemmes vægten fortsat lokalt, og resten
+// af appen kører videre uberørt — brugeren får blot en besked i vægt-kortet.
+function weightSyncProblem(msg) {
+  document.getElementById('wHint').textContent =
+    'Vægten er gemt lokalt, men kunne ikke synkroniseres: ' + msg +
+    ' (er tabellen "weights" oprettet i Supabase?)';
+}
+
+function scheduleWeightSave(w) {
+  if (!sb || !user || !w) return;
+  clearTimeout(weightSaveTimer);
+  setSyncStatus('busy', 'Synkroniserer…');
+  weightSaveTimer = setTimeout(() => pushWeight(w), 800);
+}
+
+async function pushWeight(w) {
+  if (!sb || !user) return;
+  try {
+    const { error } = await sb.from(WEIGHT_TABLE)
+      .upsert({ user_id: user.id, date: w.date, kg: w.kg });
+    if (error) {
+      console.error('Sync-fejl (vægt):', error);
+      weightSyncProblem(error.message);
+      setSyncStatus('off', 'Sync-fejl: ' + error.message);
+    } else {
+      pendingWeightDates.delete(w.date);
+      saveLocal();
+      setSyncStatus('on', 'Synkroniseret ' + nowTime());
+    }
+  } catch (err) {
+    console.error('Netværksfejl (vægt):', err);
+    setSyncStatus('off', 'Gemmes lokalt (ingen forbindelse)');
+  }
+}
+
+async function removeRemoteWeight(date) {
+  if (!sb || !user) return;
+  // RLS begrænser allerede til egne rækker, så datoen alene er nok
+  await sb.from(WEIGHT_TABLE).delete().eq('date', date);
+}
+
+async function pullWeights() {
+  if (!sb || !user) return;
+  const { data, error } = await sb.from(WEIGHT_TABLE).select('date,kg');
+  if (error) {
+    console.error('Kunne ikke hente vægt:', error);
+    weightSyncProblem(error.message);
+    return;
+  }
+
+  const byDate = new Map();
+  (data || []).forEach(r => byDate.set(String(r.date).slice(0, 10), { date: String(r.date).slice(0, 10), kg: Number(r.kg) }));
+
+  // Skub lokale ændringer op, som skyen endnu ikke har bekræftet
+  const localPending = weights.filter(w => pendingWeightDates.has(w.date));
+  if (localPending.length) {
+    const { error: upErr } = await sb.from(WEIGHT_TABLE)
+      .upsert(localPending.map(w => ({ user_id: user.id, date: w.date, kg: w.kg })));
+    if (upErr) {
+      console.error('Sync-fejl (upload af lokal vægt):', upErr);
+      weightSyncProblem(upErr.message);
+      renderWeight();
+      return;
+    }
+    localPending.forEach(w => pendingWeightDates.delete(w.date));
+  }
+
+  // Skyen er sandheden; lokale pending-ændringer vinder (de er netop skubbet op).
+  // En lokal dato der hverken er i skyen eller pending, er slettet på en anden
+  // enhed → den genoplives ikke.
+  localPending.forEach(w => byDate.set(w.date, w));
+  weights = Array.from(byDate.values());
+
+  saveLocal();
+  renderWeight();
 }
 
 // ---- Live-synkronisering (Supabase Realtime) ----
@@ -974,6 +1155,155 @@ function render() {
   mealList.querySelectorAll('.add-food').forEach(btn => {
     btn.addEventListener('click', () => openFoodModal(btn.getAttribute('data-meal')));
   });
+}
+
+// ---- Vægt ----
+function todayKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// 'ÅÅÅÅ-MM-DD' → Date midt på dagen, så tidszoner ikke skubber datoen en dag
+function dateFromKey(key) { return new Date(key + 'T12:00:00'); }
+
+function weightDateLabel(key) {
+  const d = dateFromKey(key);
+  const today = new Date();
+  const yest = new Date(); yest.setDate(today.getDate() - 1);
+  const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (same(d, today)) return 'I dag';
+  if (same(d, yest)) return 'I går';
+  return d.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function shortDate(key) {
+  return dateFromKey(key).toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
+}
+
+function fmtKg(n) { return (Math.round(n * 10) / 10).toLocaleString('da-DK', { maximumFractionDigits: 1 }); }
+
+function sortedWeights() {
+  return [...weights].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+}
+
+function logWeight() {
+  if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
+  const input = document.getElementById('wKg');
+  const hint = document.getElementById('wHint');
+  // Dansk tastatur giver komma som decimaltegn
+  const kg = parseFloat(input.value.trim().replace(',', '.'));
+  if (isNaN(kg) || kg <= 0 || kg > 500) { hint.textContent = 'Skriv en vægt i kg, f.eks. 82,4'; return; }
+
+  const date = todayKey();
+  let w = weights.find(x => x.date === date);
+  if (w) w.kg = kg;                        // samme dag igen → opdatér frem for at oprette en ny
+  else { w = { date: date, kg: kg }; weights.push(w); }
+  pendingWeightDates.add(date);
+
+  saveLocal();
+  input.value = '';
+  hint.textContent = 'Vægt gemt for i dag.';
+  renderWeight();
+  scheduleWeightSave(w);
+}
+
+function deleteWeight(date) {
+  weights = weights.filter(w => w.date !== date);
+  pendingWeightDates.delete(date);
+  saveLocal();
+  renderWeight();
+  removeRemoteWeight(date);
+}
+
+function renderWeight() {
+  const loggedIn = isLoggedIn();
+  const sorted = sortedWeights();
+  const last = sorted[sorted.length - 1];
+
+  document.getElementById('weightNow').textContent = last ? fmtKg(last.kg) + ' kg' : '–';
+  document.getElementById('weightSubLbl').textContent = last
+    ? (last.date === todayKey() ? 'Vægt i dag' : 'Seneste vægt · ' + weightDateLabel(last.date))
+    : 'Ingen vægt registreret endnu';
+
+  const wBtn = document.getElementById('wAddBtn');
+  document.getElementById('wKg').disabled = !loggedIn;
+  wBtn.disabled = !loggedIn;
+  wBtn.style.opacity = loggedIn ? '' : '0.5';
+  document.getElementById('wHint').style.display = loggedIn ? 'block' : 'none';
+  document.getElementById('wLoginHint').style.display = loggedIn ? 'none' : 'block';
+
+  drawWeightChart(sorted);
+
+  const list = document.getElementById('weightList');
+  if (!sorted.length) {
+    list.innerHTML = '<div class="empty">Ingen vægt registreret endnu</div>';
+    return;
+  }
+  list.innerHTML = sorted.slice().reverse().map(w =>
+    '<div class="weight-row">' +
+      '<span class="w-date">' + weightDateLabel(w.date) + '</span>' +
+      '<span class="w-kg">' + fmtKg(w.kg) + ' kg</span>' +
+      (loggedIn ? '<button class="del" data-date="' + w.date + '">✕</button>' : '') +
+    '</div>').join('');
+
+  list.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', () => deleteWeight(btn.getAttribute('data-date')));
+  });
+}
+
+// Datapunkter (de faktiske registreringer) + en glidende gennemsnit-linje ovenpå.
+// Dag-til-dag-udsving i vægt er for en stor del vand og larm — trend-linjen er signalet.
+function drawWeightChart(sorted) {
+  const svg = document.getElementById('weightChart');
+  const pts = sorted.slice(-60);
+  if (pts.length < 2) { svg.style.display = 'none'; return; }   // én prik er ikke en graf
+
+  const W = 320, H = 140, L = 36, R = 10, T = 12, B = 20;   // matcher viewBox
+  const times = pts.map(p => dateFromKey(p.date).getTime());
+  const kgs = pts.map(p => p.kg);
+  const t0 = times[0];
+  const tSpan = (times[times.length - 1] - t0) || 1;
+  const minK = Math.min.apply(null, kgs), maxK = Math.max.apply(null, kgs);
+  const pad = (maxK - minK) * 0.15 || 0.5;   // luft over/under; 0.5 kg hvis alt er ens
+  const lo = minK - pad, hi = maxK + pad;
+
+  // X følger datoen (ikke rækkefølgen), så en uges pause også ser ud som en pause
+  const x = t => L + (t - t0) / tSpan * (W - L - R);
+  const y = kg => T + (hi - kg) / (hi - lo) * (H - T - B);
+
+  // Trailing glidende gennemsnit over de seneste 7 registreringer. Vinduet er kortere
+  // i starten, så linjen begynder allerede ved første punkt.
+  const WIN = 7;
+  const ma = kgs.map((_, i) => {
+    const win = kgs.slice(Math.max(0, i - WIN + 1), i + 1);
+    return win.reduce((s, v) => s + v, 0) / win.length;
+  });
+
+  const maPath = ma.map((v, i) =>
+    (i ? 'L' : 'M') + x(times[i]).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+
+  const dots = pts.map((p, i) =>
+    '<circle cx="' + x(times[i]).toFixed(1) + '" cy="' + y(p.kg).toFixed(1) + '" r="' +
+    (i === pts.length - 1 ? 3.5 : 2.5) + '" fill="var(--accent2)"/>').join('');
+
+  svg.innerHTML =
+    '<text x="' + (L - 6) + '" y="' + (y(maxK) + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--muted)">' + fmtKg(maxK) + '</text>' +
+    '<text x="' + (L - 6) + '" y="' + (y(minK) + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--muted)">' + fmtKg(minK) + '</text>' +
+    '<text x="' + L + '" y="' + (H - 5) + '" font-size="9" fill="var(--muted)">' + shortDate(pts[0].date) + '</text>' +
+    '<text x="' + (W - R) + '" y="' + (H - 5) + '" text-anchor="end" font-size="9" fill="var(--muted)">' + shortDate(pts[pts.length - 1].date) + '</text>' +
+    '<path d="' + maPath + '" fill="none" stroke="var(--accent)" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+    dots;
+  svg.style.display = 'block';
+}
+
+// ---- Faner ----
+function switchTab(name) {
+  const activeView = name === 'weight' ? 'viewWeight' : 'viewKcal';
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === activeView));
+  document.querySelectorAll('.tabbar .tab').forEach(b => b.classList.toggle('active', b.getAttribute('data-tab') === name));
+  try { localStorage.setItem(TAB_KEY, name); } catch (e) { /* privat browsing */ }
+  window.scrollTo(0, 0);
 }
 
 // ---- Fødevare-modal (tilføj til / rediger en fødevare) ----
@@ -1228,7 +1558,7 @@ document.getElementById('newMealBtn').addEventListener('click', () => {
 
 // ---- Eksport / backup ----
 function exportData() {
-  const blob = new Blob([JSON.stringify({ meals, entries }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ meals, entries, weights }, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -1266,6 +1596,14 @@ document.getElementById('saveSbBtn').addEventListener('click', () => {
   location.reload();
 });
 
+// ---- Vægt + faner ----
+document.getElementById('wAddBtn').addEventListener('click', logWeight);
+document.getElementById('wKg').addEventListener('keydown', (e) => { if (e.key === 'Enter') logWeight(); });
+document.getElementById('wLoginHint').addEventListener('click', () => modalOverlay.classList.add('open'));
+document.querySelectorAll('.tabbar .tab').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.getAttribute('data-tab')));
+});
+
 // ---- Dagligt kaloriemål ----
 const goalInput = document.getElementById('goalInput');
 goalInput.addEventListener('input', () => {
@@ -1277,6 +1615,7 @@ goalInput.addEventListener('input', () => {
 // ---- Opstart ----
 loadState();
 if (goal > 0) goalInput.value = goal;
+switchTab(localStorage.getItem(TAB_KEY) === 'weight' ? 'weight' : 'kcal');   // åbn på den fane man sidst brugte
 render();
 applyAuthGate();   // start med lukket adgang indtil login er bekræftet
 initSupabase();

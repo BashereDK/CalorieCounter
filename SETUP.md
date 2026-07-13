@@ -148,6 +148,37 @@ create policy "produkter - opdater" on products for update to authenticated usin
 > Springer du denne tabel over, virker resten af appen upåvirket — du kan bare
 > ikke skanne stregkoder (indtast i stedet manuelt som hidtil).
 
+### Tabel til vægt-sporing
+
+Vægt-fanen gemmer **én registrering pr. dag**. Kør denne blok i **SQL Editor**:
+
+```sql
+-- Din vægt, én række pr. dag. Primærnøglen er (user_id, date), så samme dag
+-- registreret fra to enheder rammer den samme række i stedet for at give dubletter.
+create table weights (
+  user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  date       date not null,
+  kg         numeric not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, date)
+);
+
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table weights to authenticated;
+
+alter table weights enable row level security;
+
+-- Din vægt er privat: kun dine egne rækker
+create policy "egen vaegt - laes"    on weights for select to authenticated using (auth.uid() = user_id);
+create policy "egen vaegt - indsaet" on weights for insert to authenticated with check (auth.uid() = user_id);
+create policy "egen vaegt - opdater" on weights for update to authenticated using (auth.uid() = user_id);
+create policy "egen vaegt - slet"    on weights for delete to authenticated using (auth.uid() = user_id);
+```
+
+> Springer du tabellen over, kan du stadig registrere vægt — men den gemmes kun
+> **lokalt på den enhed** og følger ikke med til dine andre enheder. Appen skriver
+> det i vægt-kortet, hvis synkroniseringen fejler.
+
 ---
 
 ## Del 4 – Aktivér login med email + adgangskode
@@ -265,6 +296,14 @@ hold mod en vares stregkode. Navn + kcal/100g udfyldes automatisk; tast antal
 gram og **Tilføj til måltidet**. Skanner du samme vare igen, står der *"Hentet
 fra din database"* (den kommer nu fra Supabase i stedet for API'et).
 
+**Test vægt-sporing** (hvis du oprettede `weights`-tabellen i Del 3): tryk på
+fanen **⚖️ Vægt** nederst → skriv din vægt (fx `82,4`) → **Gem**. Tallet vises
+øverst, og registreringen kommer i historikken. Registrerer du igen samme dag,
+*opdateres* dagens vægt i stedet for at give en ny linje. Efter et par dage
+tegnes en graf: prikkerne er dine målinger, den blå linje er det glidende
+gennemsnit (de daglige udsving er mest vand — linjen viser den reelle trend).
+Tjek **Table Editor** → `weights` for at bekræfte, at rækken er i skyen.
+
 ---
 
 ## Del 8 – Backup
@@ -290,6 +329,8 @@ fra din database"* (den kommer nu fra Supabase i stedet for API'et).
 | Kan ikke logge ind i hjemmeskærm-appen | Log ind *inde i appen* med email + adgangskode (hjemmeskærm-appen deler ikke login med Safari, men adgangskode-login virker fint indefra). |
 | 📷 Skan stregkode gør ingenting / kamera starter ikke | Tillad kamera-adgang for siden (Safari: **aA** i adresselinjen → Websteds­indstillinger → Kamera → Tillad). Kræver HTTPS – brug GitHub Pages-URL'en, ikke en lokal `file://`. |
 | *"Vare ikke fundet"* ved skanning | Varen findes ikke i Open Food Facts. Indtast den manuelt – den gemmes så i dit `products`-katalog og genkendes næste gang, hvis du vil tilføje den dertil. |
+| Vægten gemmes, men er der ikke på min anden enhed | `weights`-tabellen mangler i Supabase. Kør SQL'en i Del 3. Vægt-kortet skriver selv fejlen, hvis synkroniseringen fejler. |
+| Grafen på vægt-fanen vises ikke | Der skal mindst **to** registreringer til, før der er en kurve at tegne. |
 
 ---
 
@@ -303,9 +344,12 @@ fra din database"* (den kommer nu fra Supabase i stedet for API'et).
         │     └─ supabase-js   ← taler med skyen
         ▼
  Supabase
-   ├─ Auth (magic link)      → hvem er du?  (auth.uid())
-   └─ Postgres: entries      → dine data, beskyttet af RLS
+   ├─ Auth (email + kode)    → hvem er du?  (auth.uid())
+   └─ Postgres
+      ├─ entries   → dine måltider/fødevarer, beskyttet af RLS
+      ├─ weights   → din vægt, beskyttet af RLS
+      └─ products  → delt stregkode-katalog (offentlige ernæringstal)
 ```
 
-Kilden til sandhed er altid `entries`-tabellen i Supabase. localStorage er kun
-en hurtig kopi. Derfor mister du ikke data, selv hvis telefonen rydder cachen.
+Kilden til sandhed er altid Supabase. localStorage er kun en hurtig kopi.
+Derfor mister du ikke data, selv hvis telefonen rydder cachen.
