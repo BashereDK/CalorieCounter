@@ -123,9 +123,15 @@
   .weight-now { font-size: 28px; font-weight: 700; color: var(--accent); }
   .sub-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.4px; }
   .chart { width: 100%; height: auto; display: block; margin: 14px 0 4px; }
-  .weight-input { display: flex; gap: 10px; margin-top: 14px; }
-  .weight-input input { flex: 1; }
-  .weight-input button { width: auto; padding: 12px 22px; }
+  .weight-input { display: flex; gap: 10px; margin-top: 6px; }
+  .weight-input input {
+    flex: 1;
+    padding: 16px 14px;
+    font-size: 26px; font-weight: 700;
+    text-align: center; letter-spacing: 0.5px;
+  }
+  .weight-input input::placeholder { font-weight: 600; color: var(--border); }
+  .weight-input button { width: auto; padding: 12px 24px; font-size: 16px; }
 
   /* Beholder til en liste af rækker: kortets ramme, men uden egen padding (som .meal-card) */
   .list-card {
@@ -415,8 +421,9 @@
 
       <svg class="chart" id="weightChart" viewBox="0 0 320 140" style="display:none;" aria-hidden="true"></svg>
 
+      <label for="wKg">Registrér vægt (kg)</label>
       <div class="weight-input">
-        <input id="wKg" type="text" inputmode="decimal" autocomplete="off" placeholder="kg, f.eks. 82,4">
+        <input id="wKg" type="text" inputmode="decimal" autocomplete="off" placeholder="82,4">
         <button class="secondary" id="wAddBtn">Gem</button>
       </div>
       <div class="hint" id="wHint">Én registrering pr. dag — gemmer du igen i dag, opdateres dagens vægt.</div>
@@ -1216,7 +1223,25 @@ function shortDate(key) {
   return dateFromKey(key).toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
 }
 
-function fmtKg(n) { return (Math.round(n * 10) / 10).toLocaleString('da-DK', { maximumFractionDigits: 1 }); }
+// Altid præcis én decimal, med dansk komma: 82 → "82,0", 82.44 → "82,4"
+function fmtKg(n) {
+  return Number(n).toLocaleString('da-DK', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+// Læs feltet: dansk tastatur giver komma som decimaltegn. Runder til én decimal,
+// så det gemte tal er præcis det, brugeren får vist. NaN hvis feltet ikke er et tal.
+function readWeightInput() {
+  const raw = document.getElementById('wKg').value.trim().replace(',', '.');
+  const kg = parseFloat(raw);
+  return isNaN(kg) ? NaN : Math.round(kg * 10) / 10;
+}
+
+// Når man forlader feltet, vises tallet med én decimal ("82" → "82,0").
+// Ugyldigt indhold får lov at stå, så man kan rette i det.
+function normalizeWeightInput() {
+  const kg = readWeightInput();
+  if (!isNaN(kg)) document.getElementById('wKg').value = fmtKg(kg);
+}
 
 function sortedWeights() {
   return [...weights].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
@@ -1226,8 +1251,7 @@ function logWeight() {
   if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
   const input = document.getElementById('wKg');
   const hint = document.getElementById('wHint');
-  // Dansk tastatur giver komma som decimaltegn
-  const kg = parseFloat(input.value.trim().replace(',', '.'));
+  const kg = readWeightInput();
   if (isNaN(kg) || kg <= 0 || kg > 500) { hint.textContent = 'Skriv en vægt i kg, f.eks. 82,4'; return; }
 
   const date = todayKey();
@@ -1636,6 +1660,7 @@ document.getElementById('saveSbBtn').addEventListener('click', () => {
 // ---- Vægt + faner ----
 document.getElementById('wAddBtn').addEventListener('click', logWeight);
 document.getElementById('wKg').addEventListener('keydown', (e) => { if (e.key === 'Enter') logWeight(); });
+document.getElementById('wKg').addEventListener('blur', normalizeWeightInput);
 document.getElementById('wLoginHint').addEventListener('click', () => modalOverlay.classList.add('open'));
 document.querySelectorAll('.tabbar .tab').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.getAttribute('data-tab')));
