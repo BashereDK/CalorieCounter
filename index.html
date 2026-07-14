@@ -460,6 +460,7 @@
         <button class="secondary" id="signInBtn" style="flex:1;">Log ind</button>
         <button class="secondary" id="signUpBtn" style="flex:1;">Opret konto</button>
       </div>
+      <button class="close" id="forgotBtn" style="margin-top:6px;">Glemt adgangskode? Send nulstillingslink</button>
       <div class="hint" id="loginHint">Første gang: skriv email + en selvvalgt adgangskode og tryk <b>Opret konto</b>. Derefter bruger du <b>Log ind</b>.</div>
     </div>
 
@@ -658,6 +659,8 @@ function initSupabase() {
   sb.auth.onAuthStateChange((event, session) => {
     user = session ? session.user : null;
     updateAccountUI();
+    // Åbnet via nulstillingslink → bed med det samme om en ny adgangskode
+    if (event === 'PASSWORD_RECOVERY') startPasswordRecovery();
     if (user) {
       pullAll();
       pullWeights();
@@ -716,6 +719,39 @@ async function signUp() {
       + 'Supabase. Slå "Confirm email" fra (Authentication → Providers → Email), '
       + 'og tryk så "Log ind".';
   }
+}
+
+// Glemt adgangskode (eller aldrig haft en — gamle magic-link-konti). Uden dette
+// er man låst ude: "Sæt / skift adgangskode" kræver en aktiv session, som man
+// netop ikke kan få uden en adgangskode.
+//
+// Supabase sender et nulstillingslink på mail. På iPhone åbner linket i Safari og
+// ikke i hjemmeskærm-appen (den har sit eget login-rum) — men det gør ikke noget
+// her: i Safari sætter man en NY adgangskode, og den kan man derefter taste ind i
+// hjemmeskærm-appen. Kun selve linket skal åbnes i Safari, ikke selve loginet.
+async function sendPasswordReset() {
+  const { email, hint } = loginFields();
+  if (!sb) { hint.textContent = 'Konfigurer Supabase-forbindelsen først (se Avanceret).'; return; }
+  if (!email) { hint.textContent = 'Skriv din email øverst — så sender vi et nulstillingslink til den.'; return; }
+  hint.textContent = 'Sender link…';
+
+  // Tilbage til appen selv (skal stå under Redirect URLs i Supabase)
+  const redirectTo = location.origin + location.pathname;
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo });
+  if (error) { hint.textContent = 'Kunne ikke sende link: ' + error.message; return; }
+
+  hint.innerHTML = 'Vi har sendt et link til <b>' + escapeHtml(email) + '</b>. Åbn det (det åbner i Safari), ' +
+    'vælg en ny adgangskode — og log så ind her i appen med den.';
+}
+
+// Appen er åbnet via nulstillingslinket: Supabase har givet os en midlertidig
+// session, der kun må bruges til ét: at sætte en ny adgangskode.
+function startPasswordRecovery() {
+  modalOverlay.classList.add('open');
+  document.getElementById('pwChangeArea').style.display = 'block';
+  document.getElementById('pwChangeHint').textContent =
+    'Vælg en ny adgangskode nu. Brug den derefter til at logge ind i appen på din hjemmeskærm.';
+  setTimeout(() => document.getElementById('newPasswordInput').focus(), 50);
 }
 
 // Sæt/skift adgangskode på den konto man er logget ind på. Bruges bl.a. til
@@ -1581,6 +1617,7 @@ document.getElementById('closeModal').addEventListener('click', () => modalOverl
 document.getElementById('addHint').addEventListener('click', () => modalOverlay.classList.add('open'));
 document.getElementById('signInBtn').addEventListener('click', signIn);
 document.getElementById('signUpBtn').addEventListener('click', signUp);
+document.getElementById('forgotBtn').addEventListener('click', sendPasswordReset);
 document.getElementById('passwordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
 document.getElementById('setPasswordBtn').addEventListener('click', setPassword);
 document.getElementById('newPasswordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') setPassword(); });

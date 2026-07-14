@@ -71,7 +71,8 @@ Lokalt: data caches i browserens localStorage, så appen virker offline og loade
 Bemærk: localStorage er KUN en cache — iOS Safari kan slette den efter ~7 dages inaktivitet. Den permanente kopi lever i skyen.
 Cloud (kilde til sandhed): Supabase (hostet Postgres) med login → data ligger server-side og går ikke tabt
 
-Login: email + adgangskode via Supabase Auth (signUp opretter konto, signInWithPassword logger ind) — session huskes længe via refresh-token. Adgangskode bruges frem for magic-link/kode, fordi et link fra Mail på iOS åbner i Safari og ikke i hjemmeskærm-appen (som har sit eget login-rum), og fordi kode-i-mail kræver custom SMTP. Adgangskode-login sker helt inde i appen. Kræver at "Confirm email" er slået fra i Supabase, så signUp logger ind med det samme.
+Login: email + adgangskode via Supabase Auth (signUp opretter konto, signInWithPassword logger ind) — session huskes længe via refresh-token.
+Glemt adgangskode: resetPasswordForEmail sender et nulstillingslink tilbage til appen. Åbnes appen via linket (event PASSWORD_RECOVERY), beder den straks om en ny adgangskode. Nødvendigt, fordi "Sæt / skift adgangskode" kræver en aktiv session — uden nulstilling er en bruger uden adgangskode låst ude for evigt. Adgangskode bruges frem for magic-link/kode, fordi et link fra Mail på iOS åbner i Safari og ikke i hjemmeskærm-appen (som har sit eget login-rum), og fordi kode-i-mail kræver custom SMTP. Adgangskode-login sker helt inde i appen. Kræver at "Confirm email" er slået fra i Supabase, så signUp logger ind med det samme.
 Tabel: entries med kolonner id, user_id, meal_id, datetime, food, meal, kcal_100, grams, kcal
 (meal_id grupperer fødevarer i samme måltid; datetime + meal er måltidets tid/type, denormaliseret på hver fødevare. Tomme måltider uden fødevarer lever kun lokalt indtil første fødevare tilføjes.)
 Tabel: weights med kolonner user_id, date, kg — primærnøgle (user_id, date), så en upsert af

@@ -208,6 +208,13 @@ stedet kræver betalt/ekstern SMTP, som vi undgår.)
 > rammer ikke Supabase' gratis-mailgrænse. Adgangskoden gemmes sikkert (hashet)
 > i Supabase Auth – aldrig i din kode eller i localStorage.
 
+> **Glemt adgangskode:** appen har knappen **Glemt adgangskode? Send
+> nulstillingslink** på login-skærmen. Den sender en mail via Supabase med et
+> link tilbage til appen. Linket åbner i Safari (ikke i hjemmeskærm-appen) – og
+> det er helt fint: du sætter en *ny adgangskode* i Safari og taster den derefter
+> ind i hjemmeskærm-appen. Det er kun selve linket, der skal åbnes i Safari, ikke
+> loginet. Kræver at din app-URL står under **Redirect URLs** (se ovenfor).
+
 ---
 
 ## Del 5 – Sæt dine nøgler ind i appen
@@ -322,7 +329,8 @@ Tjek **Table Editor** → `weights` for at bekræfte, at rækken er i skyen.
 | *"Email not confirmed"* ved login | *"Confirm email"* er slået til i Supabase. Slå den fra (Del 4, trin 3) og log ind igen. |
 | *"Invalid login credentials"* | Forkert email/adgangskode – eller kontoen findes ikke endnu. Første gang skal du bruge **Opret konto**. |
 | *"User already registered"* ved Opret konto | Kontoen findes allerede. Brug **Log ind** i stedet. |
-| Gammel konto (oprettet med magic-link) har ingen adgangskode | Er du stadig logget ind på én enhed (grøn prik): åbn **⚙️** → **Sæt / skift adgangskode** → gem. Log så ind med den på dine andre enheder. Er du logget helt ud alle steder, kan du nulstille adgangskoden under **Authentication → Users** i Supabase. |
+| Glemt adgangskoden – eller gammel konto (magic-link) uden adgangskode | Tryk **⚙️** → **Glemt adgangskode? Send nulstillingslink**. Åbn linket i mailen (det åbner i Safari, ikke i hjemmeskærm-appen – det er fint), vælg en ny adgangskode, og log så ind i appen med den. Er du *stadig* logget ind på én enhed, kan du i stedet bare bruge **Sæt / skift adgangskode**. |
+| Nulstillingsmailen kommer ikke | Supabases indbyggede mailserver er kraftigt rate-limitet (få mails i timen) og lander nemt i spam. Tjek spam-mappen og vent lidt. Virker det stadig ikke, kan du sætte adgangskoden direkte i Supabase: **Authentication → Users** → din bruger → **Reset password**. |
 | Data vises ikke efter login | Åbn browser-konsollen. Ofte manglende RLS-policies – kør SQL'en i Del 3 igen. |
 | *"new row violates row-level security policy"* | `insert`-policyen mangler, eller `user_id` sættes forkert. Genkør Del 3. |
 | Login glemmes hele tiden | Normalt hvis du bruger privat/inkognito-fane. I almindelig Safari/hjemmeskærm-app huskes sessionen længe. |
