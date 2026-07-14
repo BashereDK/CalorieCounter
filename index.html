@@ -123,15 +123,17 @@
   .weight-now { font-size: 28px; font-weight: 700; color: var(--accent); }
   .sub-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.4px; }
   .chart { width: 100%; height: auto; display: block; margin: 14px 0 4px; }
-  .weight-input { display: flex; gap: 10px; margin-top: 6px; }
-  .weight-input input {
-    flex: 1;
-    padding: 16px 14px;
-    font-size: 26px; font-weight: 700;
-    text-align: center; letter-spacing: 0.5px;
+  /* Vægt-feltet fylder hele linjen — man skal kunne se tallet mens man taster */
+  #wKg {
+    width: 100%;
+    padding: 18px 14px;
+    font-size: 34px;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 1px;
+    line-height: 1.2;
   }
-  .weight-input input::placeholder { font-weight: 600; color: var(--border); }
-  .weight-input button { width: auto; padding: 12px 24px; font-size: 16px; }
+  #wKg::placeholder { font-weight: 600; color: #3a4050; }
 
   /* Beholder til en liste af rækker: kortets ramme, men uden egen padding (som .meal-card) */
   .list-card {
@@ -422,10 +424,8 @@
       <svg class="chart" id="weightChart" viewBox="0 0 320 140" style="display:none;" aria-hidden="true"></svg>
 
       <label for="wKg">Registrér vægt (kg)</label>
-      <div class="weight-input">
-        <input id="wKg" type="text" inputmode="decimal" autocomplete="off" placeholder="82,4">
-        <button class="secondary" id="wAddBtn">Gem</button>
-      </div>
+      <input id="wKg" type="text" inputmode="decimal" autocomplete="off" placeholder="82,4">
+      <button class="add" id="wAddBtn" style="margin-top:12px;">Gem vægt</button>
       <div class="hint" id="wHint">Én registrering pr. dag — gemmer du igen i dag, opdateres dagens vægt.</div>
       <div class="hint" id="wLoginHint" style="display:none; text-align:center; margin-top:10px; cursor:pointer;">🔒 Log ind for at registrere din vægt</div>
     </div>
