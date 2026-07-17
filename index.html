@@ -524,8 +524,8 @@
     <h2>Rediger vægt</h2>
     <p>Ret dato eller vægt. Flytter du registreringen til en dag, der allerede har en vægt, bliver du spurgt først.</p>
 
-    <label for="wEditDate">Dato</label>
-    <input id="wEditDate" type="date">
+    <label for="wEditDate">Dato (ÅÅÅÅ-MM-DD)</label>
+    <input id="wEditDate" type="text" inputmode="numeric" autocomplete="off" placeholder="2026-07-15">
 
     <label for="wEditKg">Vægt (kg)</label>
     <input id="wEditKg" type="text" inputmode="decimal" autocomplete="off" placeholder="82,4">
@@ -1230,8 +1230,19 @@ function todayKey() {
 // 'ÅÅÅÅ-MM-DD' → Date midt på dagen, så tidszoner ikke skubber datoen en dag
 function dateFromKey(key) { return new Date(key + 'T12:00:00'); }
 
-// Vægt-datoer vises i ÅÅÅÅ-MM-DD — altså nøglen selv, uformateret. Samme streng
-// i listen, i grafen og i databasen.
+function weightDateLabel(key) {
+  const d = dateFromKey(key);
+  const today = new Date();
+  const yest = new Date(); yest.setDate(today.getDate() - 1);
+  const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (same(d, today)) return 'I dag';
+  if (same(d, yest)) return 'I går';
+  return d.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function shortDate(key) {
+  return dateFromKey(key).toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
+}
 
 // Altid præcis én decimal, med dansk komma: 82 → "82,0", 82.44 → "82,4"
 function fmtKg(n) {
@@ -1251,6 +1262,29 @@ function readWeightInput() {
 function normalizeWeightInput() {
   const kg = readWeightInput();
   if (!isNaN(kg)) document.getElementById('wKg').value = fmtKg(kg);
+}
+
+// Læs en dato fra tekstfeltet. Kræver år først, så der aldrig er tvivl om, hvad
+// der er dag og måned (et <input type="date"> viser styresystemets format — hos
+// nogle MM/DD/YYYY — og det kan ikke overstyres; derfor taster vi ISO selv).
+// Accepterer ÅÅÅÅ-M-D samt '.' og '/' som skilletegn og normaliserer til ÅÅÅÅ-MM-DD.
+// Returnerer null hvis det ikke er en rigtig kalenderdato.
+function parseDateKey(s) {
+  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(String(s == null ? '' : s).trim());
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const dt = new Date(y, mo - 1, d);
+  // Fanger fx 2026-02-31, som JS ellers stiltiende ruller frem til 3. marts
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+
+// Når man forlader dato-feltet, vises den normaliserede form ("2026-7-5" → "2026-07-05").
+// Ugyldigt indhold får lov at stå, så man kan rette i det.
+function normalizeDateInput() {
+  const el = document.getElementById('wEditDate');
+  const key = parseDateKey(el.value);
+  if (key) el.value = key;
 }
 
 function sortedWeights() {
@@ -1297,7 +1331,6 @@ function openWeightEdit(date) {
   if (!w) return;
   editingWeightDate = date;
   document.getElementById('wEditDate').value = w.date;
-  document.getElementById('wEditDate').max = todayKey();   // fremtidig vægt giver ikke mening
   document.getElementById('wEditKg').value = fmtKg(w.kg);
   document.getElementById('wEditHint').textContent = '';
   weightModalOverlay.classList.add('open');
@@ -1312,19 +1345,19 @@ function saveWeightEdit() {
   if (!editingWeightDate || !isLoggedIn()) return;
   const hint = document.getElementById('wEditHint');
   const oldDate = editingWeightDate;
-  const newDate = document.getElementById('wEditDate').value;
+  const newDate = parseDateKey(document.getElementById('wEditDate').value);
   const raw = document.getElementById('wEditKg').value.trim().replace(',', '.');
   const parsed = parseFloat(raw);
   const kg = isNaN(parsed) ? NaN : Math.round(parsed * 10) / 10;
 
-  if (!newDate) { hint.textContent = 'Vælg en dato.'; return; }
+  if (!newDate) { hint.textContent = 'Skriv datoen som ÅÅÅÅ-MM-DD, f.eks. 2026-07-15.'; return; }
   if (newDate > todayKey()) { hint.textContent = 'Du kan ikke registrere en vægt frem i tiden.'; return; }
   if (isNaN(kg) || kg <= 0 || kg > 500) { hint.textContent = 'Skriv en vægt i kg, f.eks. 82,4'; return; }
 
   // Flytter vi oven i en anden dags registrering?
   if (newDate !== oldDate && weights.some(x => x.date === newDate)) {
     const eksisterende = weights.find(x => x.date === newDate);
-    if (!confirm(newDate + ' har allerede en vægt på ' + fmtKg(eksisterende.kg) +
+    if (!confirm(weightDateLabel(newDate) + ' har allerede en vægt på ' + fmtKg(eksisterende.kg) +
                  ' kg. Skal den erstattes med ' + fmtKg(kg) + ' kg?')) return;
   }
 
@@ -1353,7 +1386,7 @@ function renderWeight() {
 
   document.getElementById('weightNow').textContent = last ? fmtKg(last.kg) + ' kg' : '–';
   document.getElementById('weightSubLbl').textContent = last
-    ? (last.date === todayKey() ? 'Vægt i dag' : 'Seneste vægt · ' + last.date)
+    ? (last.date === todayKey() ? 'Vægt i dag' : 'Seneste vægt · ' + weightDateLabel(last.date))
     : 'Ingen vægt registreret endnu';
 
   const wBtn = document.getElementById('wAddBtn');
@@ -1372,7 +1405,7 @@ function renderWeight() {
   }
   list.innerHTML = sorted.slice().reverse().map(w =>
     '<div class="weight-row">' +
-      '<span class="w-date">' + w.date + '</span>' +
+      '<span class="w-date">' + weightDateLabel(w.date) + '</span>' +
       '<span class="w-kg">' + fmtKg(w.kg) + ' kg</span>' +
       (loggedIn ? '<button class="edit" data-date="' + w.date + '">✎</button>' : '') +
       (loggedIn ? '<button class="del" data-date="' + w.date + '">✕</button>' : '') +
@@ -1424,8 +1457,8 @@ function drawWeightChart(sorted) {
   svg.innerHTML =
     '<text x="' + (L - 6) + '" y="' + (y(maxK) + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--muted)">' + fmtKg(maxK) + '</text>' +
     '<text x="' + (L - 6) + '" y="' + (y(minK) + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--muted)">' + fmtKg(minK) + '</text>' +
-    '<text x="' + L + '" y="' + (H - 5) + '" font-size="9" fill="var(--muted)">' + pts[0].date + '</text>' +
-    '<text x="' + (W - R) + '" y="' + (H - 5) + '" text-anchor="end" font-size="9" fill="var(--muted)">' + pts[pts.length - 1].date + '</text>' +
+    '<text x="' + L + '" y="' + (H - 5) + '" font-size="9" fill="var(--muted)">' + shortDate(pts[0].date) + '</text>' +
+    '<text x="' + (W - R) + '" y="' + (H - 5) + '" text-anchor="end" font-size="9" fill="var(--muted)">' + shortDate(pts[pts.length - 1].date) + '</text>' +
     '<path d="' + maPath + '" fill="none" stroke="var(--accent)" stroke-width="2" ' +
       'stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
     dots;
@@ -1741,10 +1774,11 @@ document.getElementById('wLoginHint').addEventListener('click', () => modalOverl
 document.getElementById('wEditSaveBtn').addEventListener('click', saveWeightEdit);
 document.getElementById('wEditCloseBtn').addEventListener('click', closeWeightEdit);
 document.getElementById('wEditKg').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveWeightEdit(); });
+document.getElementById('wEditDate').addEventListener('blur', normalizeDateInput);
 document.getElementById('wEditDelBtn').addEventListener('click', () => {
   const date = editingWeightDate;
   if (!date) return;
-  if (!confirm('Slet vægten for ' + date + '?')) return;
+  if (!confirm('Slet vægten for ' + weightDateLabel(date).toLowerCase() + '?')) return;
   closeWeightEdit();
   deleteWeight(date);
 });

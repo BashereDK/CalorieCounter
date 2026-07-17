@@ -63,15 +63,17 @@ er for en stor del vand — trend-linjen er signalet. X-aksen følger datoen, s�
 i registreringerne også ses som et hul. Grafen er ren inline SVG (intet bibliotek) og
 vises først ved mindst to registreringer.
 
-Datoer på vægt-fanen vises i ÅÅÅÅ-MM-DD (samme format som nøglen og databasen) — i historikken,
-i grafens akse og i undertitlen. Undtagelsen er selve dato-vælgeren i redigerings-modalen
-(<input type="date">), som tegnes af styresystemet og følger telefonens sprogindstilling.
-
 Historik med alle registreringer (nyeste øverst). Hver række kan redigeres (✎) eller slettes (✕).
 I redigeringen kan både vægt og dato rettes — datoen er nøglen, så en ændret dato er en flytning:
 den gamle række slettes (også i skyen) og en ny skrives. Flytter man oven i en dag der allerede
 har en vægt, spørger appen først, i stedet for at overskrive i tavshed. Fremtidige datoer afvises.
 Redigering af datoen er også måden at efterregistrere en dag, man glemte.
+
+Datoformat: vist i dansk format ("I dag", "I går", "13. juli 2026"), men indtastet som ÅÅÅÅ-MM-DD.
+Dato-feltet er bevidst et tekstfelt og ikke <input type="date">, fordi sidstnævnte tegnes af
+styresystemet og kan vise MM/DD/YYYY — hvor 07/08 både kan være 8. juli og 7. august. År-først
+fjerner den tvetydighed. Indtastningen normaliseres ("2026-7-5" → "2026-07-05"), accepterer
+'-', '.' og '/' som skilletegn, og afviser datoer der ikke findes (fx 31. februar).
 
 Lagring og synkronisering
 
