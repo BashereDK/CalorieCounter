@@ -63,6 +63,10 @@ er for en stor del vand — trend-linjen er signalet. X-aksen følger datoen, s�
 i registreringerne også ses som et hul. Grafen er ren inline SVG (intet bibliotek) og
 vises først ved mindst to registreringer.
 
+Datoer på vægt-fanen vises i ÅÅÅÅ-MM-DD (samme format som nøglen og databasen) — i historikken,
+i grafens akse og i undertitlen. Undtagelsen er selve dato-vælgeren i redigerings-modalen
+(<input type="date">), som tegnes af styresystemet og følger telefonens sprogindstilling.
+
 Historik med alle registreringer (nyeste øverst). Hver række kan redigeres (✎) eller slettes (✕).
 I redigeringen kan både vægt og dato rettes — datoen er nøglen, så en ændret dato er en flytning:
 den gamle række slettes (også i skyen) og en ny skrives. Flytter man oven i en dag der allerede
