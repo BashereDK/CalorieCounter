@@ -304,9 +304,11 @@ gram og **Tilføj til måltidet**. Skanner du samme vare igen, står der *"Hente
 fra din database"* (den kommer nu fra Supabase i stedet for API'et).
 
 **Test vægt-sporing** (hvis du oprettede `weights`-tabellen i Del 3): tryk på
-fanen **⚖️ Vægt** nederst → skriv din vægt (fx `82,4`) → **Gem**. Tallet vises
+fanen **⚖️ Vægt** nederst → skriv din vægt (fx `82,4`) → **Gem vægt**. Tallet vises
 øverst, og registreringen kommer i historikken. Registrerer du igen samme dag,
-*opdateres* dagens vægt i stedet for at give en ny linje. Efter et par dage
+*opdateres* dagens vægt i stedet for at give en ny linje. Tryk **✎** på en række
+i historikken for at rette vægt eller dato (dét er også måden at efterregistrere
+en dag, du glemte). Efter et par dage
 tegnes en graf: prikkerne er dine målinger, den blå linje er det glidende
 gennemsnit (de daglige udsving er mest vand — linjen viser den reelle trend).
 Tjek **Table Editor** → `weights` for at bekræfte, at rækken er i skyen.

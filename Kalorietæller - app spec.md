@@ -63,7 +63,11 @@ er for en stor del vand — trend-linjen er signalet. X-aksen følger datoen, s�
 i registreringerne også ses som et hul. Grafen er ren inline SVG (intet bibliotek) og
 vises først ved mindst to registreringer.
 
-Historik med alle registreringer (nyeste øverst), som kan slettes enkeltvis
+Historik med alle registreringer (nyeste øverst). Hver række kan redigeres (✎) eller slettes (✕).
+I redigeringen kan både vægt og dato rettes — datoen er nøglen, så en ændret dato er en flytning:
+den gamle række slettes (også i skyen) og en ny skrives. Flytter man oven i en dag der allerede
+har en vægt, spørger appen først, i stedet for at overskrive i tavshed. Fremtidige datoer afvises.
+Redigering af datoen er også måden at efterregistrere en dag, man glemte.
 
 Lagring og synkronisering
 

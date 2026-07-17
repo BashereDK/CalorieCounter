@@ -134,6 +134,8 @@
     line-height: 1.2;
   }
   #wKg::placeholder { font-weight: 600; color: #3a4050; }
+  /* iOS viser et tomt date-felt meget lavt — hold højden ens med de andre felter */
+  input[type="date"] { min-height: 48px; }
 
   /* Beholder til en liste af rækker: kortets ramme, men uden egen padding (som .meal-card) */
   .list-card {
@@ -243,11 +245,11 @@
   .entry .food { font-size: 15px; font-weight: 600; }
   .entry .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .entry .kcal { font-size: 15px; font-weight: 700; color: var(--accent2); white-space: nowrap; }
-  .entry .del {
+  .entry .del, .weight-row .del {
     background: none; border: none; color: var(--danger);
     font-size: 18px; padding: 4px 6px; line-height: 1;
   }
-  .entry .edit {
+  .entry .edit, .weight-row .edit {
     background: none; border: none; color: var(--muted);
     font-size: 16px; padding: 4px 6px; line-height: 1;
   }
@@ -514,6 +516,25 @@
 
     <button class="add" id="fAddBtn">Tilføj til måltidet</button>
     <button class="close" id="fCloseBtn">Færdig</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="weightModalOverlay">
+  <div class="modal">
+    <h2>Rediger vægt</h2>
+    <p>Ret dato eller vægt. Flytter du registreringen til en dag, der allerede har en vægt, bliver du spurgt først.</p>
+
+    <label for="wEditDate">Dato</label>
+    <input id="wEditDate" type="date">
+
+    <label for="wEditKg">Vægt (kg)</label>
+    <input id="wEditKg" type="text" inputmode="decimal" autocomplete="off" placeholder="82,4">
+
+    <div class="hint" id="wEditHint"></div>
+
+    <button class="add" id="wEditSaveBtn">Gem ændringer</button>
+    <button class="secondary" id="wEditDelBtn" style="margin-top:10px; color: var(--danger);">Slet registrering</button>
+    <button class="close" id="wEditCloseBtn">Annullér</button>
   </div>
 </div>
 
@@ -1275,6 +1296,67 @@ function deleteWeight(date) {
   removeRemoteWeight(date);
 }
 
+// ---- Rediger en vægt-registrering ----
+// Datoen er nøglen, så en ændret dato er en FLYTNING: den gamle række skal slettes
+// (også i skyen), og en ny skrives. Rammer man en dag der allerede har en vægt,
+// spørger vi først — ellers ville den blive overskrevet i tavshed.
+let editingWeightDate = null;
+
+function openWeightEdit(date) {
+  if (!isLoggedIn()) { modalOverlay.classList.add('open'); return; }
+  const w = weights.find(x => x.date === date);
+  if (!w) return;
+  editingWeightDate = date;
+  document.getElementById('wEditDate').value = w.date;
+  document.getElementById('wEditDate').max = todayKey();   // fremtidig vægt giver ikke mening
+  document.getElementById('wEditKg').value = fmtKg(w.kg);
+  document.getElementById('wEditHint').textContent = '';
+  weightModalOverlay.classList.add('open');
+}
+
+function closeWeightEdit() {
+  weightModalOverlay.classList.remove('open');
+  editingWeightDate = null;
+}
+
+function saveWeightEdit() {
+  if (!editingWeightDate || !isLoggedIn()) return;
+  const hint = document.getElementById('wEditHint');
+  const oldDate = editingWeightDate;
+  const newDate = document.getElementById('wEditDate').value;
+  const raw = document.getElementById('wEditKg').value.trim().replace(',', '.');
+  const parsed = parseFloat(raw);
+  const kg = isNaN(parsed) ? NaN : Math.round(parsed * 10) / 10;
+
+  if (!newDate) { hint.textContent = 'Vælg en dato.'; return; }
+  if (newDate > todayKey()) { hint.textContent = 'Du kan ikke registrere en vægt frem i tiden.'; return; }
+  if (isNaN(kg) || kg <= 0 || kg > 500) { hint.textContent = 'Skriv en vægt i kg, f.eks. 82,4'; return; }
+
+  // Flytter vi oven i en anden dags registrering?
+  if (newDate !== oldDate && weights.some(x => x.date === newDate)) {
+    const eksisterende = weights.find(x => x.date === newDate);
+    if (!confirm(weightDateLabel(newDate) + ' har allerede en vægt på ' + fmtKg(eksisterende.kg) +
+                 ' kg. Skal den erstattes med ' + fmtKg(kg) + ' kg?')) return;
+  }
+
+  // Fjern både den gamle dato og en evt. eksisterende række på den nye dato
+  weights = weights.filter(x => x.date !== oldDate && x.date !== newDate);
+  const w = { date: newDate, kg: kg };
+  weights.push(w);
+  pendingWeightDates.add(newDate);
+
+  saveLocal();
+  renderWeight();
+  closeWeightEdit();
+
+  // Datoen er skiftet → den gamle række skal væk i skyen, ellers står den tilbage som en dublet
+  if (newDate !== oldDate) {
+    pendingWeightDates.delete(oldDate);
+    removeRemoteWeight(oldDate);
+  }
+  scheduleWeightSave(w);
+}
+
 function renderWeight() {
   const loggedIn = isLoggedIn();
   const sorted = sortedWeights();
@@ -1303,9 +1385,13 @@ function renderWeight() {
     '<div class="weight-row">' +
       '<span class="w-date">' + weightDateLabel(w.date) + '</span>' +
       '<span class="w-kg">' + fmtKg(w.kg) + ' kg</span>' +
+      (loggedIn ? '<button class="edit" data-date="' + w.date + '">✎</button>' : '') +
       (loggedIn ? '<button class="del" data-date="' + w.date + '">✕</button>' : '') +
     '</div>').join('');
 
+  list.querySelectorAll('.edit').forEach(btn => {
+    btn.addEventListener('click', () => openWeightEdit(btn.getAttribute('data-date')));
+  });
   list.querySelectorAll('.del').forEach(btn => {
     btn.addEventListener('click', () => deleteWeight(btn.getAttribute('data-date')));
   });
@@ -1630,6 +1716,7 @@ function exportData() {
 // ---- Indstillinger ----
 const modalOverlay = document.getElementById('modalOverlay');
 const foodModalOverlay = document.getElementById('foodModalOverlay');
+const weightModalOverlay = document.getElementById('weightModalOverlay');
 document.getElementById('settingsBtn').addEventListener('click', () => {
   const url = localStorage.getItem('kalorie_sb_url');
   const key = localStorage.getItem('kalorie_sb_key');
@@ -1662,6 +1749,16 @@ document.getElementById('wAddBtn').addEventListener('click', logWeight);
 document.getElementById('wKg').addEventListener('keydown', (e) => { if (e.key === 'Enter') logWeight(); });
 document.getElementById('wKg').addEventListener('blur', normalizeWeightInput);
 document.getElementById('wLoginHint').addEventListener('click', () => modalOverlay.classList.add('open'));
+document.getElementById('wEditSaveBtn').addEventListener('click', saveWeightEdit);
+document.getElementById('wEditCloseBtn').addEventListener('click', closeWeightEdit);
+document.getElementById('wEditKg').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveWeightEdit(); });
+document.getElementById('wEditDelBtn').addEventListener('click', () => {
+  const date = editingWeightDate;
+  if (!date) return;
+  if (!confirm('Slet vægten for ' + weightDateLabel(date).toLowerCase() + '?')) return;
+  closeWeightEdit();
+  deleteWeight(date);
+});
 document.querySelectorAll('.tabbar .tab').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.getAttribute('data-tab')));
 });
